@@ -28,10 +28,12 @@ cargo build
 or install latest versions individually
 
 ```shell
-cargo add axum tokio --features tokio/full serde --features serde/derive serde_json dotenvy sqlx argon2 rand
+cargo add axum tokio --features tokio/full serde --features serde/derive serde_json dotenvy sqlx argon2 rand sqlx-cli --no-default-features --features postgres 
 ```
 
 3. Start the local database via Docker
+
+E.g.
 
 ```shell
 docker run -d --name ramhs__dev-db -p 5433:5432 -e POSTGRES_USER=okpainmo -e POSTGRES_PASSWORD=supersecret -e POSTGRES_DB=rust-axum-monolith-http-server__db_dev postgres
@@ -40,10 +42,16 @@ docker run -d --name ramhs__dev-db -p 5433:5432 -e POSTGRES_USER=okpainmo -e POS
 3. Run the server
 
 ```shell
-cargo run
+cargo run # single session - no auto-refresh on file save
 ```
 
-or with `cargo-watch`
+Or 
+
+```shell
+cargo dev
+```
+
+> The above command runs the server with `cargo-watch`. See the command config inside `.cargo.config.toml`.
 
 ```shell
 cargo install cargo-watch
@@ -52,5 +60,32 @@ cargo install cargo-watch
 ```shell
 cargo watch -q -c -w src/ -x "run"
 ```
+
+> **Skip Step 4: It only applies during extra/progressive development**
+
+4. Prepare to sync SQL schema with database.
+
+```shell
+sqlx migrate add <migration_name>
+```
+
+E.g.
+
+```shell
+sqlx migrate init
+```
+
+5. Migrate(Sync with the DB) 
+
+```shell
+sqlx migrate run --database-url <database-url>
+```
+
+E.g.
+
+```shell
+sqlx migrate run --database-url postgres://okpainmo:supersecret@localhost:5433/rust-axum-monolith-http-server__db_dev
+```
+
 
 Cheers!!!
