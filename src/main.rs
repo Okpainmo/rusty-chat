@@ -1,55 +1,31 @@
 use axum::{
     extract::Extension,
     routing::post,
-    Json, Router,
+    Router,
 };
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+
 use std::net::SocketAddr;
 use dotenvy;
 use std::env;
 
+// logging init with the tracing crate
+use tracing_subscriber::fmt::time::SystemTime;
+
+// utils import
+pub mod utils;
 // db import
 mod db; // include the db folder
 use db::connect_postgres::connect_pg;
 
-// utils import
-mod utils;
-use utils::hashing_handler::hashing_handler;
+// controllers import
+mod controllers;
+use controllers::register_user::register_user;
+use controllers::login_user::login_user;
 
-// ====== Request Data ======
-#[derive(Debug, Deserialize)]
-struct RegisterRequest {
-    first_name: String,
-    last_name: String,
-    email: String,
-    password: String,
-}
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-struct UserProfile {
-    #[sqlx(rename = "id")]
-    user_id: i64,
-    full_name: String,
-    email: String,
-    profile_image_url: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct Response {
-    user_profile: UserProfile,
-}
-
-// ====== Response Data ======
-#[derive(Debug, Serialize)]
-struct RegisterResponse {
-    response_message: String,    
-    response: Option<Response>,
-    error: Option<String>
-}
 
 fn load_env() {
-    dotenvy::dotenv().ok(); // loads .env first
+    dotenvy::dotenv().ok();
 
     let env = env::var("DEPLOY_ENV").unwrap_or("development".into());
     let filename = format!(".env.{}", env);
@@ -58,89 +34,28 @@ fn load_env() {
     // println!("Loaded config: {}", filename);
 }
 
-// ====== Handler for POST /register ======
-async fn register_handler(
-    Extension(db_pool): Extension<PgPool>,
-    Json(payload): Json<RegisterRequest>
-) -> Json<RegisterResponse> {
-    // Hash the password
-    let hashed_password = match hashing_handler(payload.password.as_str()).await {
-        Ok(hash) => hash,
-        Err(e) => {
-            return Json(RegisterResponse {
-                response_message: "Failed to hash password".to_string(),
-                response: None,
-                error: Some(format!("Password hashing error: {}", e)),
-            });
-        }
-    };
+// IntoResponse setup for custom status code usage
+// impl<T: Serialize> IntoResponse for (StatusCode, ApiResponse<T>) {
+//     fn into_response(self) -> Response {
+//         let (status, body) = self;
+//         (status, Json(body)).into_response()
+//     }
+// }
 
-    // Check if email already exists
-    let email_exists: Option<i64> = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM users WHERE email = $1"
-    )
-    .bind(&payload.email)
-    .fetch_optional(&db_pool)
-    .await
-    .unwrap_or(None)
-    .flatten();
-
-    if let Some(count) = email_exists {
-        if count > 0 {
-            return Json(RegisterResponse {
-                response_message: "Registration failed".to_string(),
-                response: None,
-                error: Some("Email already exists".to_string()),
-            });
-        }
-    }
-
-    // Insert user into database (schema: email, password, full_name, profile_image_url)
-    let full_name = format!("{} {}", payload.first_name, payload.last_name);
-
-    let result = sqlx::query_as::<_, UserProfile>(
-        r#"
-            INSERT INTO users (email, password, full_name, profile_image_url)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, full_name, email, profile_image_url
-        "#
-    )
-    .bind(&payload.email)
-    .bind(&hashed_password)
-    .bind(&full_name)
-    .bind(Option::<String>::None)
-    .fetch_one(&db_pool)
-    .await;
-
-    match result {
-        Ok(new_user) => Json(RegisterResponse {
-            response_message: format!("User with email '{}' registered successfully!", payload.email),
-            response: Some(Response {
-                user_profile: new_user,
-            }),
-            error: None,
-        }),
-        Err(e) => {
-            // Handle unique constraint violations or other DB errors
-            let error_msg = if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
-                "Email already exists".to_string()
-            } else {
-                format!("Database error: {}", e)
-            };
-
-            Json(RegisterResponse {
-                response_message: "Failed to register user".to_string(),
-                response: None,
-                error: Some(error_msg),
-            })
-        }
-    }
+fn initialize_logging() {
+    tracing_subscriber::fmt()
+        .json()
+        .with_timer(SystemTime)
+        // .with_thread_ids(true)
+        .with_level(true)
+        .init();
 }
 
 #[tokio::main]
 async fn main() {
     load_env();
-    println!("DB = {:?}", std::env::var("DATABASE_URL"));
+    initialize_logging();
+    // info!("DB = {:?}", std::env::var("DATABASE_URL"));
 
     
     // println!("Environment: {}", env);
@@ -160,13 +75,16 @@ async fn main() {
     let db_pool = connect_pg(database_url.clone()).await;
 
     let app = Router::new()
-        .route("/api/v1/auth/register", post(register_handler))
+        .route("/api/v1/auth/register", post(register_user))
+        .route("/api/v1/auth/log-in", post(login_user))
         .layer(Extension(db_pool));
 
     // Server address
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
 
-    println!(
+    let slice_db_url = format!("{}...", &database_url[0..40]);
+
+    print!(
         "
         .................................................
         Connected to DB: {}
@@ -176,7 +94,9 @@ async fn main() {
 
         Server running on http://{}
         ",
-        database_url, environment, addr
+        slice_db_url,
+        environment,
+        addr
     );
 
     // Start server
