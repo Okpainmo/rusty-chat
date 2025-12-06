@@ -9,3 +9,6 @@ bash.exe.stackdump
 .env.template
 .env
 .env*
+
+# extras
+.idea
