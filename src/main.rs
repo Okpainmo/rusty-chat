@@ -22,6 +22,7 @@ use crate::utils::load_env::load_env;
 
 // controllers import
 mod domains;
+mod middlewares;
 
 use crate::domains::auth::router::auth_routes;
 
