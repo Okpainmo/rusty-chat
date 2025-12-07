@@ -7,7 +7,8 @@ use crate::utils::generate_tokens::User;
 // utils import
 // use crate::utils::error_handlers::coded_error_handlers::print_error;
 use crate::utils::hashing_handler::hashing_handler;
-
+use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 // pub struct User {
 //     pub id: i64,
 //     pub email: String,
@@ -34,6 +35,8 @@ pub struct UserProfile {
 #[derive(Debug, Serialize)]
 pub struct ResponseCore {
     user_profile: UserProfile,
+    access_token: Option<String>,
+    refresh_token:  Option<String>
 }
 
 // ====== Response Data ======
@@ -45,28 +48,10 @@ pub struct RegisterResponse {
 }
 
 pub async fn register_user(
+    cookies: Cookies,
     Extension(db_pool): Extension<PgPool>,
-    Json(payload): Json<RegisterRequest>,
+    Json(payload): Json<RegisterRequest>, // this should always come last else your domain(auth) router might throw an error
 ) -> impl IntoResponse {
-    let _user_email = payload.email;
-
-    let tokens = match generate_tokens("auth", User { id: 3, email: _user_email.to_string() }).await {
-        Ok(tokens) => tokens,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(RegisterResponse {
-                    response_message: "Failed to generate tokens".to_string(),
-                    response: None,
-                    error: Some(format!("Token generation error: {}", e)),
-                }),
-            );
-        }
-    };
-    
-    println!("Tokens generated: {:?}", tokens);
-
-    let user_email = _user_email;
 
     // Hash the password
     let hashed_password = match hashing_handler(payload.password.as_str()).await {
@@ -86,7 +71,7 @@ pub async fn register_user(
     // Check if email already exists
     let email_exists: Option<i64> =
         sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE email = $1")
-            .bind(&user_email)
+            .bind(&payload.email)
             .fetch_optional(&db_pool)
             .await
             .unwrap_or(None)
@@ -113,7 +98,7 @@ pub async fn register_user(
             RETURNING id, full_name, email, profile_image_url
         "#,
     )
-    .bind(&user_email)
+    .bind(&payload.email)
     .bind(&hashed_password)
     .bind(&full_name)
     .bind(Option::<String>::None)
@@ -121,19 +106,38 @@ pub async fn register_user(
     .await;
 
     match result {
-        Ok(new_user) => (
-            StatusCode::CREATED,
-            Json(RegisterResponse {
-                response_message: format!(
-                    "User with email '{}' registered successfully!",
-                    &user_email
-                ),
-                response: Some(ResponseCore {
-                    user_profile: new_user,
-                }),
-                error: None,
-            }),
-        ),
+        Ok(new_user) => {
+            let tokens = match generate_tokens("auth", User { id: 3, email: payload.email.clone() }).await {
+                Ok(tokens) => tokens,
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(RegisterResponse {
+                            response_message: "Failed to generate tokens".to_string(),
+                            response: None,
+                            error: Some(format!("Token generation error: {}", e)),
+                        }),
+                    );
+                }
+            };
+
+            deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
+
+            (
+                StatusCode::CREATED,
+                Json(RegisterResponse {
+                    response_message: format!(
+                        "User with email '{}' registered successfully!",
+                        &payload.email
+                    ),
+                    response: Some(ResponseCore {
+                        user_profile: new_user,
+                        access_token: tokens.access_token,
+                        refresh_token: tokens.refresh_token
+                    }),
+                    error: None,
+                }))
+        }
         Err(e) => {
             // Handle unique constraint violations or other DB errors
             let error_msg =
