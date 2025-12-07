@@ -3,6 +3,9 @@ use chrono::{Utc, Duration};
 use jsonwebtoken::{encode, Header, EncodingKey};
 use jsonwebtoken::errors::Error as JwtError;
 use std::env;
+use axum::http::StatusCode;
+use axum::Json;
+use crate::domains::auth::controllers::register_user::RegisterResponse;
 use crate::utils::hashing_handler::hashing_handler;
 use crate::utils::load_env::load_env;
 
@@ -75,11 +78,17 @@ pub async fn generate_tokens(token_type: &str, user: User) -> Result<Tokens, Jwt
                 &EncodingKey::from_secret(jwt_secret.as_bytes()),
             )?;
 
-            let auth_cookie_part_a = hashing_handler(user.email.as_str()).await;
+            let auth_cookie_part_a = match hashing_handler(user.email.as_str()).await {
+                Ok(hash) => hash.to_string(),
+                Err(e) => e.to_string()
+            };
 
-            let auth_cookie_part_b = hashing_handler(&jwt_secret).await;
+            let auth_cookie_part_b = match hashing_handler(&jwt_secret).await {
+                Ok(hash) => hash.to_string(),
+                Err(e) => e.to_string()
+            };;
 
-            let auth_cookie = format!("rusty_chat____{:?}____{:?}", auth_cookie_part_a, auth_cookie_part_b);
+            let auth_cookie = format!("rusty_chat____{ }____{ }", auth_cookie_part_a, auth_cookie_part_b);
 
             Ok(Tokens {
                 access_token: Some(access_token),
