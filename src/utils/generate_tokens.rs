@@ -16,6 +16,7 @@ pub struct Claims {
     pub exp: usize,  // expiry timestamp
 }
 
+#[derive(Clone)]
 pub struct User {
     pub id: i64,
     pub email: String,
