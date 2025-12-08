@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 // environmental variables... 
 use dotenvy;
 use std::env;
-
+use tracing::info;
 // logging init with the tracing crate
 use tracing_subscriber::fmt::time::SystemTime;
 
@@ -25,6 +25,7 @@ mod domains;
 mod middlewares;
 
 use crate::domains::auth::router::auth_routes;
+use crate::domains::user::router::user_routes;
 
 fn initialize_logging() {
     tracing_subscriber::fmt()
@@ -39,7 +40,7 @@ fn initialize_logging() {
 async fn main() {
     load_env();
     initialize_logging();
-    // info!("DB = {:?}", std::env::var("DATABASE_URL"));
+    // info!("DB = { }", std::env::var("DATABASE_URL").unwrap().to_string());
 
     
     // println!("Environment: {}", env);
@@ -60,6 +61,7 @@ async fn main() {
 
     let app = Router::new()
         .nest("/api/v1", auth_routes())
+        .nest("/api/v1", user_routes())
         .layer(Extension(db_pool));
     // .nest("/users", user_routes());
 
