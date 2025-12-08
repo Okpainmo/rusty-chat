@@ -97,6 +97,22 @@ pub async fn login_user(
 
             deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
 
+            let _ = sqlx::query_as::<_, UserProfile>(
+                r#"
+                        UPDATE users
+                        SET
+                            access_token = $1,
+                            refresh_token = $2,
+                            updated_at = NOW()
+                        WHERE email = $3
+                    "#
+            )
+            .bind(&tokens.access_token)
+            .bind(&tokens.refresh_token)
+            .bind(&payload.email)
+            .fetch_one(&db_pool)
+            .await;
+            
             (
                 StatusCode::OK,
                 Json(LoginResponse {

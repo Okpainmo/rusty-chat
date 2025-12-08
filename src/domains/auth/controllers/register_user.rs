@@ -29,7 +29,7 @@ pub struct UserProfile {
     user_id: i64,
     full_name: String,
     email: String,
-    profile_image_url: Option<String>,
+    profile_image_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,36 +91,52 @@ pub async fn register_user(
     // Insert user into database (schema: email, password, full_name, profile_image_url)
     let full_name = format!("{} {}", payload.first_name, payload.last_name);
 
+    let tokens = match generate_tokens("auth", User { id: 3, email: payload.email.clone() }).await {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(RegisterResponse {
+                    response_message: "Failed to generate tokens".to_string(),
+                    response: None,
+                    error: Some(format!("Token generation error: {}", e)),
+                }),
+            );
+        }
+    };
+
     let result = sqlx::query_as::<_, UserProfile>(
         r#"
-            INSERT INTO users (email, password, full_name, profile_image_url)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, full_name, email, profile_image_url
-        "#,
-    )
-    .bind(&payload.email)
-    .bind(&hashed_password)
-    .bind(&full_name)
-    .bind(Option::<String>::None)
-    .fetch_one(&db_pool)
-    .await;
+                INSERT INTO users (
+                    email,
+                    password,
+                    full_name,
+                    profile_image_url,
+                    access_token,
+                    refresh_token
+                )
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING
+                    id,
+                    full_name,
+                    email,
+                    profile_image_url,
+                    access_token,
+                    refresh_token
+            "#,
+        )
+        .bind(&payload.email)
+        .bind(&hashed_password)
+        .bind(&full_name)
+        .bind("")  // profile_image_url
+        .bind(&tokens.access_token)
+        .bind(&tokens.refresh_token)
+        // .bind(&tokens.one_time_password_token)
+        .fetch_one(&db_pool)
+        .await;
 
     match result {
         Ok(new_user) => {
-            let tokens = match generate_tokens("auth", User { id: 3, email: payload.email.clone() }).await {
-                Ok(tokens) => tokens,
-                Err(e) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(RegisterResponse {
-                            response_message: "Failed to generate tokens".to_string(),
-                            response: None,
-                            error: Some(format!("Token generation error: {}", e)),
-                        }),
-                    );
-                }
-            };
-
             deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
 
             (
