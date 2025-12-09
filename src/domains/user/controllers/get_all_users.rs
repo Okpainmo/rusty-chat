@@ -1,4 +1,9 @@
-use axum::{Json, extract::{Path, Extension}, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    extract::{Extension, Path},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
@@ -28,9 +33,7 @@ pub struct UsersResponse {
     error: Option<String>,
 }
 
-pub async fn get_all_users(
-    Extension(db_pool): Extension<PgPool>,
-) -> impl IntoResponse {
+pub async fn get_all_users(Extension(db_pool): Extension<PgPool>) -> impl IntoResponse {
     let users_result = sqlx::query_as::<_, UserProfile>(
         "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token  FROM users"
     )
