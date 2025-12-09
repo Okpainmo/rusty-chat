@@ -1,12 +1,8 @@
-use axum::{
-    extract::Extension,
-    routing::post,
-    Router,
-};
+use axum::{Router, extract::Extension, routing::post};
 
 use std::net::SocketAddr;
 
-// environmental variables... 
+// environmental variables...
 use dotenvy;
 use std::env;
 use tracing::info;
@@ -17,8 +13,8 @@ use tracing_subscriber::fmt::time::SystemTime;
 pub mod utils;
 // db import
 mod db; // include the db folder
-use db::connect_postgres::connect_pg;
 use crate::utils::load_env::load_env;
+use db::connect_postgres::connect_pg;
 
 // controllers import
 mod domains;
@@ -42,11 +38,10 @@ async fn main() {
     initialize_logging();
     // info!("DB = { }", std::env::var("DATABASE_URL").unwrap().to_string());
 
-    
     // println!("Environment: {}", env);
     // println!("Server running on port {}", port);
     // Build router
-    
+
     // let port = env::var("PORT").unwrap_or("8000".to_string());
     let environment = env::var("DEPLOY_ENV").unwrap_or("development".to_string());
     let user = env::var("POSTGRES_USER").unwrap();
@@ -65,7 +60,6 @@ async fn main() {
         .layer(Extension(db_pool));
     // .nest("/users", user_routes());
 
-
     // Server address
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
 
@@ -81,9 +75,7 @@ async fn main() {
 
         Server running on http://{}
         ",
-        slice_db_url,
-        environment,
-        addr
+        slice_db_url, environment, addr
     );
 
     // Start server
