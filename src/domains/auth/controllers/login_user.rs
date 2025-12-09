@@ -1,12 +1,12 @@
+use crate::domains::auth::controllers::register_user::RegisterResponse;
+use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use crate::domains::auth::controllers::register_user::RegisterResponse;
-use crate::utils::generate_tokens::{generate_tokens, User};
 // utils import
+use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::verification_handler::verification_handler; // your existing password verification function
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
-use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct UserProfile {
@@ -23,7 +23,7 @@ pub struct UserProfile {
 pub struct ResponseCore {
     user_profile: UserProfile,
     access_token: Option<String>,
-    refresh_token:  Option<String>
+    refresh_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,7 +81,15 @@ pub async fn login_user(
     // Verify password using your custom handler
     match verification_handler(&payload.password, &user.password).await {
         Ok(true) => {
-            let tokens = match generate_tokens("auth", User { id: 3, email: payload.email.clone() }).await {
+            let tokens = match generate_tokens(
+                "auth",
+                User {
+                    id: 3,
+                    email: payload.email.clone(),
+                },
+            )
+            .await
+            {
                 Ok(tokens) => tokens,
                 Err(e) => {
                     return (
@@ -105,28 +113,27 @@ pub async fn login_user(
                             refresh_token = $2,
                             updated_at = NOW()
                         WHERE email = $3
-                    "#
+                    "#,
             )
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
             .bind(&payload.email)
             .fetch_one(&db_pool)
             .await;
-            
+
             (
                 StatusCode::OK,
                 Json(LoginResponse {
                     response_message: "Login successful".to_string(),
-                    response: Some(ResponseCore
-                    {
+                    response: Some(ResponseCore {
                         user_profile: user,
                         access_token: tokens.access_token,
-                        refresh_token: tokens.refresh_token
-                        }),
+                        refresh_token: tokens.refresh_token,
+                    }),
                     error: None,
                 }),
             )
-        } ,
+        }
         Ok(false) => (
             StatusCode::UNAUTHORIZED,
             Json(LoginResponse {

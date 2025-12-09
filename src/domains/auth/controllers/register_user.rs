@@ -1,19 +1,18 @@
+use crate::utils::generate_tokens::User;
+use crate::utils::generate_tokens::generate_tokens;
 use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::info;
-use crate::utils::generate_tokens::generate_tokens;
-use crate::utils::generate_tokens::User;
 // utils import
 // use crate::utils::error_handlers::coded_error_handlers::print_error;
+use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::hashing_handler::hashing_handler;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
-use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 // pub struct User {
 //     pub id: i64,
 //     pub email: String,
 // }
-
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
@@ -36,7 +35,7 @@ pub struct UserProfile {
 pub struct ResponseCore {
     user_profile: UserProfile,
     access_token: Option<String>,
-    refresh_token:  Option<String>
+    refresh_token: Option<String>,
 }
 
 // ====== Response Data ======
@@ -52,7 +51,6 @@ pub async fn register_user(
     Extension(db_pool): Extension<PgPool>,
     Json(payload): Json<RegisterRequest>, // this should always come last else your domain(auth) router might throw an error
 ) -> impl IntoResponse {
-
     // Hash the password
     let hashed_password = match hashing_handler(payload.password.as_str()).await {
         Ok(hash) => hash,
@@ -91,7 +89,15 @@ pub async fn register_user(
     // Insert user into database (schema: email, password, full_name, profile_image_url)
     let full_name = format!("{} {}", payload.first_name, payload.last_name);
 
-    let tokens = match generate_tokens("auth", User { id: 3, email: payload.email.clone() }).await {
+    let tokens = match generate_tokens(
+        "auth",
+        User {
+            id: 3,
+            email: payload.email.clone(),
+        },
+    )
+    .await
+    {
         Ok(tokens) => tokens,
         Err(e) => {
             return (
@@ -124,16 +130,16 @@ pub async fn register_user(
                     access_token,
                     refresh_token
             "#,
-        )
-        .bind(&payload.email)
-        .bind(&hashed_password)
-        .bind(&full_name)
-        .bind("")  // profile_image_url
-        .bind(&tokens.access_token)
-        .bind(&tokens.refresh_token)
-        // .bind(&tokens.one_time_password_token)
-        .fetch_one(&db_pool)
-        .await;
+    )
+    .bind(&payload.email)
+    .bind(&hashed_password)
+    .bind(&full_name)
+    .bind("") // profile_image_url
+    .bind(&tokens.access_token)
+    .bind(&tokens.refresh_token)
+    // .bind(&tokens.one_time_password_token)
+    .fetch_one(&db_pool)
+    .await;
 
     match result {
         Ok(new_user) => {
@@ -149,10 +155,11 @@ pub async fn register_user(
                     response: Some(ResponseCore {
                         user_profile: new_user,
                         access_token: tokens.access_token,
-                        refresh_token: tokens.refresh_token
+                        refresh_token: tokens.refresh_token,
                     }),
                     error: None,
-                }))
+                }),
+            )
         }
         Err(e) => {
             // Handle unique constraint violations or other DB errors
