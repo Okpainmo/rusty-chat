@@ -1,20 +1,26 @@
-use axum::{extract::{Request, State}, http::{header, StatusCode}, middleware::Next, response::{IntoResponse, Response}, Extension, Json};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tower_cookies::{Cookie, Cookies};
-use crate::utils::generate_tokens::{generate_tokens, User};
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
+use crate::utils::generate_tokens::{User, generate_tokens};
+use axum::{
+    Extension, Json,
+    extract::{Request, State},
+    http::{StatusCode, header},
+    middleware::Next,
+    response::{IntoResponse, Response},
+};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use serde::{Deserialize, Serialize};
 use sqlx;
 use sqlx::PgPool;
+use std::sync::Arc;
+use tower_cookies::{Cookie, Cookies};
 // ============================================================================
 // Types/Structures
 // ============================================================================
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwtClaims {
-    pub user_id: String,
-    pub user_email: String,
+    pub id: i64,
+    pub email: String,
     pub exp: usize,
     pub iat: usize,
 }
@@ -69,7 +75,7 @@ fn verify_access_token(token: &str, secret: &str, user: &User) -> TokenStatus {
     match decode::<JwtClaims>(token, &decoding_key, &validation) {
         Ok(token_data) => {
             // Verify email matches
-            if token_data.claims.user_email != user.email {
+            if token_data.claims.email != user.email {
                 return TokenStatus::Invalid("User credentials do not match".to_string());
             }
             TokenStatus::Valid
@@ -95,12 +101,14 @@ pub async fn access_middleware(
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
+    println!("hello access middleware");
+
     let state = Arc::new(AppState {
         jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
         cookie_name: "rusty_chat_auth_cookie".to_string(),
     });
 
-    // Check for auth cookie
+    // Check for auth cookie - reject the request immediately if auth cookie is missing
     let auth_cookie = cookies.get(&state.cookie_name).ok_or_else(|| {
         (
             StatusCode::UNAUTHORIZED,
@@ -124,7 +132,8 @@ pub async fn access_middleware(
                     response_message: "User not received from sessions middleware".to_string(),
                 }),
             )
-        })?.clone();
+        })?
+        .clone();
 
     // Extract authorization header
     let auth_header = req
@@ -147,23 +156,32 @@ pub async fn access_middleware(
             StatusCode::FORBIDDEN,
             Json(ErrorResponse {
                 error: "Forbidden".to_string(),
-                response_message: "Authorization string does not match expected (Bearer Token) format".to_string(),
+                response_message:
+                    "Authorization string does not match expected (Bearer Token) format".to_string(),
             }),
         ));
     }
 
     let access_token = auth_header.trim_start_matches("Bearer ");
 
-    let tokens = match generate_tokens("auth", User { id: 3, email: user.email.clone() }).await {
+    let tokens = match generate_tokens(
+        "auth",
+        User {
+            id: user.id,
+            email: user.email.clone(),
+        },
+    )
+    .await
+    {
         Ok(tokens) => tokens,
         Err(e) => {
             return Err((
-               StatusCode::INTERNAL_SERVER_ERROR,
-               Json(ErrorResponse {
-                   response_message: "Failed to generate tokens".to_string(),
-                   error: format!("Token generation error: {}", e.to_string())
-               })),
-            )
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    response_message: "Failed to generate tokens".to_string(),
+                    error: format!("Token generation error: {}", e.to_string()),
+                }),
+            ));
         }
     };
 
@@ -174,14 +192,14 @@ pub async fn access_middleware(
 
             // Update user in database
             let _ = sqlx::query_as::<_, UserProfile>(
-            r#"
+                r#"
                     UPDATE users
                     SET
                         access_token = $1,
                         refresh_token = $2,
                         updated_at = NOW()
                     WHERE email = $3
-                "#
+                "#,
             )
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
@@ -222,7 +240,7 @@ pub async fn access_middleware(
                         refresh_token = $2,
                         updated_at = NOW()
                     WHERE email = $3
-                "#
+                "#,
             )
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
@@ -261,21 +279,6 @@ pub async fn access_middleware(
 
     Ok(next.run(req).await)
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-
-
-
-
-
-// ============================================================================
-// Session Info Structure (stored in request extensions)
-// ============================================================================
-
-
 
 // ============================================================================
 // Usage Example
