@@ -1,6 +1,6 @@
 // use cookie::Cookie;
-use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use time;
+use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 
 pub async fn deploy_auth_cookie(cookies: Cookies, cookie_value: String) {
     // let cookie = Cookie::build(("name", "value"))
