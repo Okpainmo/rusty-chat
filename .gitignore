@@ -1,6 +1,4 @@
 /target
-.vscode
-bash.exe.stackdump
 
 # .env
 .env.development
@@ -12,3 +10,5 @@ bash.exe.stackdump
 
 # extras
 .idea
+.vscode
+bash.exe.stackdump
