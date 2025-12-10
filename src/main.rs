@@ -1,4 +1,4 @@
-use axum::{Router, extract::Extension, routing::post};
+use axum::{Router, extract::Extension, middleware, routing::post};
 
 use std::net::SocketAddr;
 
@@ -10,18 +10,20 @@ use tracing::info;
 use tracing_subscriber::fmt::time::SystemTime;
 
 // utils import
-pub mod utils;
+mod utils;
 // db import
-mod db; // include the db folder
+mod db;
 use crate::utils::load_env::load_env;
 use db::connect_postgres::connect_pg;
 
 // controllers import
 mod domains;
-mod middlewares;
-
 use crate::domains::auth::router::auth_routes;
 use crate::domains::user::router::user_routes;
+
+mod middlewares;
+use crate::middlewares::logging_middleware::logging_middleware;
+use crate::middlewares::request_timeout_middleware::timeout_middleware;
 
 fn initialize_logging() {
     tracing_subscriber::fmt()
@@ -57,6 +59,8 @@ async fn main() {
     let app = Router::new()
         .nest("/api/v1", auth_routes())
         .nest("/api/v1", user_routes())
+        .layer(middleware::from_fn(timeout_middleware))
+        .layer(middleware::from_fn(logging_middleware))
         .layer(Extension(db_pool));
     // .nest("/users", user_routes());
 
