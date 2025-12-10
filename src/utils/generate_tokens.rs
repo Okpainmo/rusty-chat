@@ -17,7 +17,7 @@ pub struct Claims {
     pub iat: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct User {
     pub id: i64,
     pub email: String,
@@ -60,7 +60,7 @@ pub async fn generate_tokens(token_type: &str, user: User) -> Result<Tokens, Jwt
                 id: user.id,
                 email: user.email.clone(),
                 exp: access_token_expiration,
-                iat: Utc::now().timestamp_millis() as usize
+                iat: Utc::now().timestamp_millis() as usize,
             };
 
             let access_token = encode(
@@ -73,7 +73,7 @@ pub async fn generate_tokens(token_type: &str, user: User) -> Result<Tokens, Jwt
                 id: user.id,
                 email: user.email.clone(),
                 exp: refresh_token_expiration,
-                iat:Utc::now().timestamp_millis() as usize
+                iat: Utc::now().timestamp_millis() as usize,
             };
 
             let refresh_token = encode(
@@ -110,7 +110,7 @@ pub async fn generate_tokens(token_type: &str, user: User) -> Result<Tokens, Jwt
                 id: user.id,
                 email: user.email.clone(),
                 exp: otp_token_expiration,
-                iat:Utc::now().timestamp_millis() as usize
+                iat: Utc::now().timestamp_millis() as usize,
             };
 
             let otp_token = encode(
