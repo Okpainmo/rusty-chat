@@ -1,3 +1,4 @@
+use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::{
@@ -33,7 +34,7 @@ pub struct AppState {
     // pub db: DatabasePool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SessionInfo {
     pub user: User,
     pub new_access_token: String,
@@ -96,12 +97,14 @@ fn verify_access_token(token: &str, secret: &str, user: &User) -> TokenStatus {
 
 pub async fn access_middleware(
     // State(state): State<Arc<AppState>>, // see state declaration inside of main.rs
+    // axum::Extension(session_info): axum::Extension<SessionInfo>,
     cookies: Cookies,
     Extension(db_pool): Extension<PgPool>,
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    println!("hello access middleware");
+    // println!("hello access middleware");
+    // println!("hello access middleware: {:#?}", {session_info});
 
     let state = Arc::new(AppState {
         jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
@@ -120,20 +123,22 @@ pub async fn access_middleware(
     })?;
 
     // Get user from request extensions (should be set by session middleware)
-    let user = req
+    let sessions_middleware_output = req
         .extensions()
-        .get::<User>()
+        .get::<SessionsMiddlewareOutput>()
         // .cloned()
         .ok_or_else(|| {
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     error: "Not Found".to_string(),
-                    response_message: "User not received from sessions middleware".to_string(),
+                    response_message: "_ User not received from sessions middleware".to_string(),
                 }),
             )
         })?
         .clone();
+
+    // println!("session middleware output 1 {:#?}", req);
 
     // Extract authorization header
     let auth_header = req
@@ -164,11 +169,13 @@ pub async fn access_middleware(
 
     let access_token = auth_header.trim_start_matches("Bearer ");
 
+    // println!("session middleware output 1b {:#?}", sessions_middleware_output.user);
+
     let tokens = match generate_tokens(
         "auth",
         User {
-            id: user.id,
-            email: user.email.clone(),
+            id: sessions_middleware_output.user.id,
+            email: sessions_middleware_output.user.email.clone(),
         },
     )
     .await
@@ -186,7 +193,11 @@ pub async fn access_middleware(
     };
 
     // Verify and process access token
-    match verify_access_token(access_token, &state.jwt_secret, &user) {
+    match verify_access_token(
+        access_token,
+        &state.jwt_secret,
+        &sessions_middleware_output.user,
+    ) {
         TokenStatus::Valid => {
             /* Token is valid, renew tokens */
 
@@ -203,7 +214,7 @@ pub async fn access_middleware(
             )
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
-            .bind(&user.email)
+            .bind(&sessions_middleware_output.user.email)
             .fetch_one(&db_pool)
             .await;
 
@@ -213,17 +224,17 @@ pub async fn access_middleware(
             // Store session info in request extensions
             {
                 req.extensions_mut().insert(SessionInfo {
-                    user: user.clone(),
+                    user: sessions_middleware_output.user.clone(),
                     new_access_token: tokens.access_token.unwrap().to_string(),
                     new_refresh_token: tokens.refresh_token.unwrap().to_string(),
                     session_status: format!(
                         "ACTIVE ACCESS WITH ACTIVE SESSION: access and session renewed for '{}'",
-                        user.email
+                        sessions_middleware_output.user.email
                     ),
                 });
             }
 
-            println!("✓ Active access: tokens renewed for '{}'", user.email);
+            // println!("Active access: tokens renewed for '{}'", sessions_middleware_output.user.email);
         }
 
         TokenStatus::Expired => {
@@ -244,7 +255,7 @@ pub async fn access_middleware(
             )
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
-            .bind(&user.email)
+            .bind(&sessions_middleware_output.user.email)
             .fetch_one(&db_pool)
             .await;
 
@@ -254,17 +265,17 @@ pub async fn access_middleware(
             // Store session info in request extensions
             {
                 req.extensions_mut().insert(SessionInfo {
-                    user: user.clone(),
+                    user: sessions_middleware_output.user.clone(),
                     new_access_token: tokens.access_token.unwrap().to_string(),
                     new_refresh_token: tokens.refresh_token.unwrap().to_string(),
                     session_status: format!(
                         "EXPIRED ACCESS WITH ACTIVE SESSION: access and session renewed for '{}'",
-                        user.email
+                        sessions_middleware_output.user.email
                     ),
                 });
             }
 
-            println!("⟳ Expired access: tokens renewed for '{}'", user.email);
+            // println!("Expired access: tokens renewed for '{}'", sessions_middleware_output.user.email);
         }
         TokenStatus::Invalid(msg) => {
             return Err((
@@ -277,49 +288,7 @@ pub async fn access_middleware(
         }
     }
 
+    // println!("session middleware output 2 {:#?}", req);
+
     Ok(next.run(req).await)
 }
-
-// ============================================================================
-// Usage Example
-// ============================================================================
-
-/*
-use axum::{
-    routing::get,
-    Router,
-    middleware,
-};
-
-#[tokio::main]
-async fn main() {
-    let state = Arc::new(AppState {
-        jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
-        cookie_name: "MultiDB_NodeExpressTypescript_Template".to_string(),
-    });
-
-    let app = Router::new()
-        .route("/protected", get(protected_handler))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            access_middleware,
-        ))
-        .with_state(state);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-        .await
-        .unwrap();
-
-    axum::serve(listener, app).await.unwrap();
-}
-
-async fn protected_handler(
-    axum::Extension(session_info): axum::Extension<SessionInfo>,
-) -> impl IntoResponse {
-    Json(serde_json::json!({
-        "message": "Protected route accessed",
-        "user": session_info.user,
-        "session_status": session_info.session_status
-    }))
-}
-*/

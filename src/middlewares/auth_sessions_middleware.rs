@@ -1,15 +1,15 @@
 use axum::{
+    Extension, Json,
     extract::{Request, State},
     http::{StatusCode, header},
     middleware::Next,
-    response::{IntoResponse},
-    Extension, Json,
+    response::IntoResponse,
 };
+use jsonwebtoken::{DecodingKey, Validation, decode, errors::ErrorKind};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower_cookies::Cookies;
-use jsonwebtoken::{DecodingKey, Validation, decode, errors::ErrorKind};
 
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::User;
@@ -47,8 +47,8 @@ pub struct SessionState {
     pub cookie_name: String,
 }
 
-#[derive(Clone)]
-pub struct SessionUser {
+#[derive(Clone, Debug)]
+pub struct SessionsMiddlewareOutput {
     pub user: User,
     pub session_status: String,
 }
@@ -63,7 +63,7 @@ pub async fn sessions_middleware(
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    println!("hello session middleware");
+    // println!("hello session middleware");
 
     let state = Arc::new(SessionState {
         jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
@@ -87,7 +87,7 @@ pub async fn sessions_middleware(
             )
         })?;
 
-    println!("email: { }", email);
+    // println!("email: { }", email);
 
     let authorization = req
         .headers()
@@ -126,9 +126,9 @@ pub async fn sessions_middleware(
         WHERE email = $1
         "#,
     )
-        .bind(&email)
-        .fetch_optional(&db_pool)
-        .await
+    .bind(&email)
+    .fetch_optional(&db_pool)
+    .await
     {
         Ok(Some(u)) => u,
         Ok(None) => {
@@ -183,10 +183,10 @@ pub async fn sessions_middleware(
             }
 
             let session_status = "USER SESSION IS ACTIVE".to_string();
-            println!("✓ {}", session_status);
+            // println!("{}", session_status);
 
             // Store session user in request extensions
-            req.extensions_mut().insert(SessionUser {
+            req.extensions_mut().insert(SessionsMiddlewareOutput {
                 user: User {
                     id: user.id,
                     email: user.email.clone(),
@@ -199,13 +199,14 @@ pub async fn sessions_middleware(
             ErrorKind::ExpiredSignature => {
                 let session_status =
                     format!("EXPIRED SESSION: session terminated for '{}'", user.email);
-                println!("⨯ {}", session_status);
+                println!("{}", session_status);
 
                 return Err((
                     StatusCode::FORBIDDEN,
                     Json(ErrorResponse {
                         error: "Forbidden".to_string(),
-                        response_message: "User session expired, please re-authenticate".to_string(),
+                        response_message: "User session expired, please re-authenticate"
+                            .to_string(),
                     }),
                 ));
             }
@@ -216,10 +217,12 @@ pub async fn sessions_middleware(
                         error: "Session Verification Failed".to_string(),
                         response_message: err.to_string(),
                     }),
-                ))
+                ));
             }
         },
     }
-
+    //
+    // println!("{:#?}", &req);
+    // println!("{:#?}", &user);
     Ok(next.run(req).await)
 }
