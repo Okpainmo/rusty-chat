@@ -1,3 +1,6 @@
+use crate::middlewares::auth_access_middleware::ErrorResponse;
+use crate::middlewares::auth_access_middleware::SessionInfo;
+use axum::extract::Request;
 use axum::{
     Json,
     extract::{Extension, Path},
@@ -6,6 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+// use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct UserProfile {
@@ -33,9 +37,28 @@ pub struct UsersResponse {
 }
 
 pub async fn get_user(
+    // Extension(session): Extension<SessionUser>,
     Extension(db_pool): Extension<PgPool>,
     Path(user_id): Path<i64>,
+    // req: Request,
 ) -> impl IntoResponse {
+    // let access_middleware_output = req
+    //     .extensions()
+    //     .get::<SessionInfo>()
+    //     // .cloned()
+    //     .ok_or_else(|| {
+    //         (
+    //             StatusCode::NOT_FOUND,
+    //             Json(ErrorResponse {
+    //                 error: "Not Found".to_string(),
+    //                 response_message: "_ User not received from sessions middleware".to_string(),
+    //             }),
+    //         )
+    //     }).unwrap()
+    //     .clone();
+    //
+    // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
+
     let user_result = sqlx::query_as::<_, UserProfile>(
         "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token FROM users WHERE id = $1"
     )

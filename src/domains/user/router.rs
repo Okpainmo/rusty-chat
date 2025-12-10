@@ -1,14 +1,10 @@
-use axum::{
-    routing::get,
-    Router,
-    middleware,
-};
+use axum::{Router, middleware, routing::get};
 use tower_cookies::CookieManagerLayer;
 
 use crate::domains::user::controllers::get_all_users::get_all_users;
 use crate::domains::user::controllers::get_user::get_user;
-use crate::middlewares::auth_sessions_middleware::sessions_middleware;
 use crate::middlewares::auth_access_middleware::access_middleware;
+use crate::middlewares::auth_sessions_middleware::sessions_middleware;
 
 pub fn user_routes() -> Router {
     Router::new()
