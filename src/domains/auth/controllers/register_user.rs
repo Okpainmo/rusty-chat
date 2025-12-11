@@ -3,7 +3,7 @@ use crate::utils::generate_tokens::generate_tokens;
 use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tracing::info;
+use tracing::{error, info};
 // utils import
 // use crate::utils::error_handlers::coded_error_handlers::print_error;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
@@ -55,6 +55,8 @@ pub async fn register_user(
     let hashed_password = match hashing_handler(payload.password.as_str()).await {
         Ok(hash) => hash,
         Err(e) => {
+            error!("PASSWORD HASHING ERROR!");
+
             return (
                 StatusCode::BAD_REQUEST,
                 Json(RegisterResponse {
@@ -76,6 +78,8 @@ pub async fn register_user(
             .flatten();
 
     if email_exists.unwrap_or(0) > 0 {
+        error!("REGISTRATION FAILED: USER WITH EMAIL ALREADY EXIST!");
+
         return (
             StatusCode::FORBIDDEN,
             Json(RegisterResponse {
@@ -89,60 +93,81 @@ pub async fn register_user(
     // Insert user into database (schema: email, password, full_name, profile_image_url)
     let full_name = format!("{} {}", payload.first_name, payload.last_name);
 
-    let tokens = match generate_tokens(
-        "auth",
-        User {
-            id: 3,
-            email: payload.email.clone(),
-        },
-    )
-    .await
-    {
-        Ok(tokens) => tokens,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(RegisterResponse {
-                    response_message: "Failed to generate tokens".to_string(),
-                    response: None,
-                    error: Some(format!("Token generation error: {}", e)),
-                }),
-            );
-        }
-    };
-
+    // first create the user to be able to get a unique id for token generation
     let result = sqlx::query_as::<_, UserProfile>(
         r#"
                 INSERT INTO users (
                     email,
                     password,
                     full_name,
-                    profile_image_url,
-                    access_token,
-                    refresh_token
+                    profile_image_url
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4)
                 RETURNING
                     id,
                     full_name,
                     email,
-                    profile_image_url,
-                    access_token,
-                    refresh_token
+                    profile_image_url
             "#,
     )
     .bind(&payload.email)
     .bind(&hashed_password)
     .bind(&full_name)
     .bind("") // profile_image_url
-    .bind(&tokens.access_token)
-    .bind(&tokens.refresh_token)
     // .bind(&tokens.one_time_password_token)
     .fetch_one(&db_pool)
     .await;
 
     match result {
         Ok(new_user) => {
+            let tokens = match generate_tokens(
+                "auth",
+                User {
+                    id: new_user.user_id,
+                    email: payload.email.clone(),
+                },
+            )
+                .await
+            {
+                Ok(tokens) => tokens,
+                Err(e) => {
+                    error!("TOKEN GENERATION ERROR!");
+
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(RegisterResponse {
+                            response_message: "Failed to generate tokens".to_string(),
+                            response: None,
+                            error: Some(format!("Token generation error: {}", e)),
+                        }),
+                    );
+                }
+            };
+
+
+            // now we can add the access and refresh tokens to the user data inside the db
+            let result = sqlx::query_as::<_, UserProfile>(
+                r#"
+                INSERT INTO users (
+                    email,
+                    access_token,
+                    refresh_token
+                )
+                VALUES ($1, $2, $3)
+                RETURNING
+                    email,
+                    access_token,
+                    refresh_token
+            "#,
+            )
+                .bind(&payload.email)
+                .bind(&tokens.access_token)
+                .bind(&tokens.refresh_token)
+                .bind("") // profile_image_url
+                // .bind(&tokens.one_time_password_token)
+                .fetch_one(&db_pool)
+                .await;
+
             deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
 
             (
@@ -165,8 +190,12 @@ pub async fn register_user(
             // Handle unique constraint violations or other DB errors
             let error_msg =
                 if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
+                    error!("REGISTRATION FAILED: USER WITH EMAIL ALREADY EXIST!");
+
                     "Email already exists".to_string()
                 } else {
+                    error!("REGISTRATION FAILED: AN ERROR OCCURRED WHILE REGISTERING NEW USER!");
+
                     format!("Database error: {}", e)
                 };
 
@@ -175,7 +204,7 @@ pub async fn register_user(
                 Json(RegisterResponse {
                     response_message: "Failed to register user".to_string(),
                     response: None,
-                    error: Some(error_msg),
+                    error: Some(error_msg)
                 }),
             )
         }

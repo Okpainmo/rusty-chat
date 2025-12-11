@@ -4,7 +4,7 @@ use axum::{Json, extract::Extension, extract::Query, http::StatusCode, response:
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::{Cookie, Cookies};
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
@@ -32,7 +32,7 @@ pub async fn logout_user(
 
     cookies.remove(cookie);
 
-    let _ = sqlx::query_as::<_, UserProfile>(
+    let user = sqlx::query_as::<_, UserProfile>(
         r#"
                         UPDATE users
                         SET
@@ -48,12 +48,29 @@ pub async fn logout_user(
     .fetch_one(&db_pool)
     .await;
 
-    (
-        StatusCode::OK,
-        Json(LogoutResponse {
-            response_message: "Logout successful".to_string(),
-            error: None,
-            response: None,
-        }),
-    )
+    match user {
+        Ok(user) => {
+            (
+                StatusCode::OK,
+                Json(LogoutResponse {
+                    response_message: "Logout successful".to_string(),
+                    error: None,
+                    response: None,
+                }),
+            )
+        },
+        Err(e) =>  {
+            error!("USER LOGOUT WAS UNSUCCESSFUL!");
+            
+            (
+                StatusCode::OK,
+                Json(LogoutResponse {
+                response_message: "Logout failed!".to_string(),
+                error: None,
+                response: None,
+                }),
+            )
+        }
+    }
+
 }

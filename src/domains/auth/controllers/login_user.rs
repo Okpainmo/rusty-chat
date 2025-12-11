@@ -7,6 +7,7 @@ use sqlx::PgPool;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::verification_handler::verification_handler; // your existing password verification function
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+use tracing::error;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct UserProfile {
@@ -57,16 +58,20 @@ pub async fn login_user(
     let user = match user_result {
         Ok(Some(user)) => user,
         Ok(None) => {
+            error!("LOGIN FAILED: PROVIDE EMAIL AND PASSWORD!");
+
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(LoginResponse {
                     response_message: "Login failed".to_string(),
                     response: None,
-                    error: Some("Invalid email or password".to_string()),
+                    error: Some("Login failed - provide a correct email and password".to_string()),
                 }),
             );
         }
         Err(e) => {
+            error!("USER LOGIN FAILED!");
+
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(LoginResponse {
@@ -78,13 +83,12 @@ pub async fn login_user(
         }
     };
 
-    // Verify password using your custom handler
     match verification_handler(&payload.password, &user.password).await {
         Ok(true) => {
             let tokens = match generate_tokens(
                 "auth",
                 User {
-                    id: 3,
+                    id: user.user_id,
                     email: payload.email.clone(),
                 },
             )
@@ -92,6 +96,7 @@ pub async fn login_user(
             {
                 Ok(tokens) => tokens,
                 Err(e) => {
+                    error!("TOKEN GENERATION ERROR!");
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(LoginResponse {
@@ -134,21 +139,29 @@ pub async fn login_user(
                 }),
             )
         }
-        Ok(false) => (
-            StatusCode::UNAUTHORIZED,
-            Json(LoginResponse {
-                response_message: "Login failed".to_string(),
-                response: None,
-                error: Some("Invalid email or password".to_string()),
-            }),
-        ),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(LoginResponse {
-                response_message: "Login failed".to_string(),
-                response: None,
-                error: Some(format!("Password verification error: {}", e)),
-            }),
-        ),
+        Ok(false) => {
+            error!("USER LOGIN FAILED!");
+
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(LoginResponse {
+                    response_message: "Login failed".to_string(),
+                    response: None,
+                    error: Some("Invalid email or password".to_string()),
+                }),
+            )
+        }
+        Err(e) => {
+            error!("USER LOGIN FAILED!");
+
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(LoginResponse {
+                    response_message: "Login failed".to_string(),
+                    response: None,
+                    error: Some(format!("Password verification error: {}", e)),
+                }),
+            )
+        }
     }
 }
