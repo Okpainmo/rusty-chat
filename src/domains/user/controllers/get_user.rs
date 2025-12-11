@@ -9,6 +9,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use tracing::{error, info};
+
 // use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -19,6 +21,8 @@ pub struct UserProfile {
     profile_image_url: Option<String>,
     access_token: String,
     refresh_token: String,
+    status: String,
+    last_seen: Option<String>,
     #[serde(skip_serializing)]
     password: String,
 }
@@ -60,7 +64,7 @@ pub async fn get_user(
     // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
 
     let user_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token FROM users WHERE id = $1"
+        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen FROM users WHERE id = $1"
     )
         .bind(user_id)
         .fetch_optional(&db_pool)
@@ -75,21 +79,29 @@ pub async fn get_user(
                 error: None,
             }),
         ),
-        Ok(None) => (
-            StatusCode::NOT_FOUND,
-            Json(UserResponse {
-                response_message: "User not found".to_string(),
-                response: None,
-                error: Some(format!("No user with id {}", user_id)),
-            }),
-        ),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(UserResponse {
-                response_message: "Failed to fetch user".to_string(),
-                response: None,
-                error: Some(format!("Database error: {}", e)),
-            }),
-        ),
+        Ok(None) => {
+            error!("USER NOT FOUND!");
+
+            (
+                StatusCode::NOT_FOUND,
+                Json(UserResponse {
+                    response_message: "User not found".to_string(),
+                    response: None,
+                    error: Some(format!("No user with id {}", user_id)),
+                }),
+            )
+        }
+        Err(e) => {
+            error!("FAILED TO FETCH USER PROFILE!");
+
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(UserResponse {
+                    response_message: "Failed to fetch user".to_string(),
+                    response: None,
+                    error: Some(format!("Database error: {}", e)),
+                }),
+            )
+        }
     }
 }

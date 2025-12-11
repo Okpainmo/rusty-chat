@@ -1,0 +1,266 @@
+use axum::{
+    Json,
+    extract::{Extension, Path},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
+use tower_cookies::Cookies;
+use tracing::error;
+use crate::domains::auth::controllers::login_user::LoginResponse;
+use crate::domains::auth::controllers::register_user::RegisterResponse;
+use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
+use crate::utils::generate_tokens::{generate_tokens, User};
+use crate::utils::hashing_handler::hashing_handler;
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateUserPayload {
+    pub full_name: Option<String>,
+    pub profile_image_url: Option<String>,
+    pub email: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct UserProfile {
+    id: i64,
+    full_name: String,
+    email: String,
+    profile_image_url: Option<String>,
+    access_token: String,
+    refresh_token: String,
+    status: String,
+    last_seen: Option<String>,
+    // #[serde(skip_serializing)]
+    password: String,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct UserLookup {
+    id: i64,
+    email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateResponse {
+    response_message: String,
+    response: Option<UserProfile>,
+    error: Option<String>,
+}
+
+pub async fn update_user(
+    cookies: Cookies,
+    Extension(db_pool): Extension<PgPool>,
+    Path(user_id): Path<i64>,
+    Json(payload): Json<UpdateUserPayload>,
+) -> impl IntoResponse {
+    // Build dynamic SQL with proper parameter indexing
+    let mut set_clauses = Vec::new();
+    let mut param_index = 2; // Start at 2 because $1 is user_id
+
+    if payload.full_name.is_some() {
+        set_clauses.push(format!("full_name = ${}", param_index));
+        param_index += 1;
+    }
+    if payload.profile_image_url.is_some() {
+        set_clauses.push(format!("profile_image_url = ${}", param_index));
+        param_index += 1;
+    }
+    if payload.email.is_some() {
+        set_clauses.push(format!("email = ${}", param_index));
+        param_index += 1;
+
+        // also prepare for updating the access and refresh tokens since we'll be updating the email
+        set_clauses.push(format!("access_token = ${}", param_index));
+        param_index += 1;
+
+        set_clauses.push(format!("refresh_token = ${}", param_index));
+        param_index += 1;
+    }
+    if payload.password.is_some() {
+        set_clauses.push(format!("password = ${}", param_index));
+        param_index += 1;
+    }
+
+    if set_clauses.is_empty() {
+        error!("USER UPDATE FAILED: EMPTY REQUEST PAYLOAD PROVIDED!");
+
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(UpdateResponse {
+                response_message: "No fields were provided to update".into(),
+                response: None,
+                error: Some("Empty payload".into()),
+            }),
+        );
+    }
+
+    // Build the query
+    let query = format!(
+        r#"
+        UPDATE users
+        SET {}, updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, full_name, email, profile_image_url, password,
+                  access_token, refresh_token, status, last_seen
+        "#,
+        set_clauses.join(", ")
+    );
+
+    // Build query with bindings
+    let mut query_builder = sqlx::query_as::<_, UserProfile>(&query).bind(user_id);
+
+    if let Some(name) = payload.full_name {
+        query_builder = query_builder.bind(name);
+    }
+
+    if let Some(img) = payload.profile_image_url {
+        query_builder = query_builder.bind(img);
+    }
+
+    if let Some(email) = &payload.email {
+        // handle regeneration for new user email before binding it in
+        // 1. get user by email to access the user id
+
+        let user_result = sqlx::query_as::<_, UserLookup>(
+            "SELECT id, email FROM users WHERE id = $1",
+        )
+            // user_id from request param
+            .bind(user_id)
+            .fetch_optional(&db_pool)
+            .await;
+
+        let user = match user_result {
+            Ok(Some(user)) => user,
+            Ok(None) => {
+                error!("PROFILE UPDATE FAILED: USER NOT FOUND!");
+
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(UpdateResponse {
+                        response_message: "Login failed".to_string(),
+                        response: None,
+                        error: Some("User not found, profile update failed".to_string()),
+                    }),
+                );
+            }
+            Err(e) => {
+                error!("USER UPDATE FAILED!");
+
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(UpdateResponse {
+                        response_message: "User update failed".to_string(),
+                        response: None,
+                        error: Some(format!("Database error: {}", e)),
+                    }),
+                );
+            }
+        };
+
+        // 2. generate tokens
+        let tokens = match generate_tokens(
+            "auth",
+            User {
+                id: user.id,
+                email: user.email
+            },
+        )
+            .await
+        {
+            Ok(tokens) => tokens,
+            Err(e) => {
+                error!("TOKEN GENERATION ERROR!");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(UpdateResponse {
+                        response_message: "Failed to generate tokens".to_string(),
+                        response: None,
+                        error: Some(format!("Token generation error: {}", e)),
+                    }),
+                );
+            }
+        };
+
+        deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
+
+        query_builder = query_builder.bind(email);
+
+        // also generate query bindings for the new access and refresh tokens
+        if let Some(access_token) = tokens.access_token {
+            query_builder = query_builder.bind(access_token);
+        }
+
+        if let Some(refresh_token) = tokens.refresh_token {
+            query_builder = query_builder.bind(refresh_token);
+        }
+    }
+
+    // now hash the password before binding for db migration
+    if let Some(password) = &payload.password {
+        let hashed_password = match
+        hashing_handler(&payload.password
+            .clone()
+            .unwrap_or("Shut up!!! - I already checked for password availability on payload. Smiles. Enjoy some humour while you debug"
+            .to_string())).await {
+            Ok(hash) => hash,
+            Err(e) => {
+                error!("PASSWORD HASHING ERROR!");
+
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(UpdateResponse {
+                        response_message: "Failed to hash password".to_string(),
+                        response: None,
+                        error: Some(format!("Password hashing error: {}", e)),
+                    }),
+                );
+            }
+        };
+
+        query_builder = query_builder.bind(hashed_password);
+    }
+
+    // println!("request payload: {:?}", payload);
+
+    // println!("set_clauses: {:?}", set_clauses);
+    // println!("set_clauses: {:?}", set_clauses.join(", "));
+
+    // Execute query
+    let result = query_builder.fetch_optional(&db_pool).await;
+
+    match result {
+        Ok(Some(updated_user)) => (
+            StatusCode::OK,
+            Json(UpdateResponse {
+                response_message: "User updated successfully".into(),
+                response: Some(updated_user),
+                error: None,
+            }),
+        ),
+        Ok(None) => {
+            error!("USER NOT FOUND FOR UPDATE!");
+            (
+                StatusCode::NOT_FOUND,
+                Json(UpdateResponse {
+                    response_message: "User not found".into(),
+                    response: None,
+                    error: Some(format!("No user with id {}", user_id)),
+                }),
+            )
+        }
+        Err(e) => {
+            error!("FAILED TO UPDATE USER!");
+
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(UpdateResponse {
+                    response_message: "Failed to update user".into(),
+                    response: None,
+                    error: Some(format!("Database error: {}", e)),
+                }),
+            )
+        }
+    }
+}

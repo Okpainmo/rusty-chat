@@ -8,6 +8,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use tracing::error;
 // use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -18,6 +19,8 @@ pub struct UserProfile {
     profile_image_url: Option<String>,
     access_token: String,
     refresh_token: String,
+    status: String,
+    last_seen: Option<String>,
     #[serde(skip_serializing)]
     password: String,
 }
@@ -58,7 +61,7 @@ pub async fn get_all_users(
     // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
 
     let users_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token  FROM users"
+        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen  FROM users"
     )
     .fetch_all(&db_pool)
     .await;
@@ -72,13 +75,17 @@ pub async fn get_all_users(
                 error: None,
             }),
         ),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(UsersResponse {
-                response_message: "Failed to fetch users".to_string(),
-                response: None,
-                error: Some(format!("Database error: {}", e)),
-            }),
-        ),
+        Err(e) => {
+            error!("FAILED TO FETCH USERS!");
+
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(UsersResponse {
+                    response_message: "Failed to fetch users".to_string(),
+                    response: None,
+                    error: Some(format!("Database error: {}", e)),
+                }),
+            )
+        } 
     }
 }
