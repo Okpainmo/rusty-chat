@@ -1,6 +1,6 @@
 # Rusty Chat.
 
-A standard and modular(domain-driven-development) chat application backend built with the Rust programming language(and the Axum framework).
+A modular(domain-driven-development patterned) opensource chat application backend built with the Rust programming language(and the Axum framework).
 
 ## Features
 
@@ -23,7 +23,7 @@ cargo build
 or install latest versions individually
 
 ```shell
-cargo add axum tokio --features tokio/full serde --features serde/derive serde_json dotenvy sqlx argon2 rand sqlx-cli --no-default-features --features postgres tracing tracing-subscriber jsonwebtoken --features rust_crypto chrono tower-cookies time
+cargo add axum tokio --features tokio/full serde --features serde/derive serde_json dotenvy sqlx argon2 rand sqlx-cli --no-default-features --features postgres tracing tracing-subscriber jsonwebtoken --features rust_crypto chrono tower-cookies time aws-config --features behavior-version-latest aws-sdk-s3 --features behavior-version-latest
 ```
 
 3. Start the local database via Docker
