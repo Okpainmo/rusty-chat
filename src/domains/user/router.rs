@@ -1,10 +1,10 @@
-use axum::{Router, middleware, routing::get};
 use axum::routing::patch;
+use axum::{Router, middleware, routing::get};
 use tower_cookies::CookieManagerLayer;
 
 use crate::domains::user::controllers::get_all_users::get_all_users;
-use crate::domains::user::controllers::update_user::update_user;
 use crate::domains::user::controllers::get_user::get_user;
+use crate::domains::user::controllers::update_user::update_user;
 use crate::middlewares::auth_access_middleware::access_middleware;
 use crate::middlewares::auth_sessions_middleware::sessions_middleware;
 

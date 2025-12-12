@@ -25,6 +25,8 @@ pub struct UserProfile {
     last_seen: Option<String>,
     #[serde(skip_serializing)]
     password: String,
+    is_admin: bool,
+    is_active: bool,
 }
 #[derive(Debug, Serialize)]
 pub struct UserResponse {
@@ -64,7 +66,7 @@ pub async fn get_user(
     // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
 
     let user_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen FROM users WHERE id = $1"
+        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen, is_active, is_admin FROM users WHERE id = $1"
     )
         .bind(user_id)
         .fetch_optional(&db_pool)

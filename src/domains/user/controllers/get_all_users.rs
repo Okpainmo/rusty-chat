@@ -23,6 +23,8 @@ pub struct UserProfile {
     last_seen: Option<String>,
     #[serde(skip_serializing)]
     password: String,
+    is_admin: bool,
+    is_active: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -61,7 +63,7 @@ pub async fn get_all_users(
     // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
 
     let users_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen  FROM users"
+        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen, is_active, is_admin  FROM users"
     )
     .fetch_all(&db_pool)
     .await;
@@ -86,6 +88,6 @@ pub async fn get_all_users(
                     error: Some(format!("Database error: {}", e)),
                 }),
             )
-        } 
+        }
     }
 }

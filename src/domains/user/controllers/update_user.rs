@@ -1,6 +1,15 @@
+use crate::domains::auth::controllers::login_user::LoginResponse;
+use crate::domains::auth::controllers::register_user::RegisterResponse;
+use crate::middlewares::auth_access_middleware::ErrorResponse;
+use crate::middlewares::auth_access_middleware::SessionInfo;
+use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
+use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
+use crate::utils::generate_tokens::{User, generate_tokens};
+use crate::utils::hashing_handler::hashing_handler;
+
 use axum::{
     Json,
-    extract::{Extension, Path},
+    extract::{Extension, Path, Request},
     http::StatusCode,
     response::IntoResponse,
 };
@@ -8,11 +17,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::error;
-use crate::domains::auth::controllers::login_user::LoginResponse;
-use crate::domains::auth::controllers::register_user::RegisterResponse;
-use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
-use crate::utils::generate_tokens::{generate_tokens, User};
-use crate::utils::hashing_handler::hashing_handler;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserPayload {
@@ -32,8 +36,10 @@ pub struct UserProfile {
     refresh_token: String,
     status: String,
     last_seen: Option<String>,
-    // #[serde(skip_serializing)]
+    #[serde(skip_serializing)]
     password: String,
+    is_admin: bool,
+    is_active: bool,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -52,6 +58,7 @@ pub struct UpdateResponse {
 pub async fn update_user(
     cookies: Cookies,
     Extension(db_pool): Extension<PgPool>,
+    Extension(session): Extension<SessionsMiddlewareOutput>,
     Path(user_id): Path<i64>,
     Json(payload): Json<UpdateUserPayload>,
 ) -> impl IntoResponse {
@@ -103,7 +110,7 @@ pub async fn update_user(
         SET {}, updated_at = NOW()
         WHERE id = $1
         RETURNING id, full_name, email, profile_image_url, password,
-                  access_token, refresh_token, status, last_seen
+                  access_token, refresh_token, status, last_seen, is_active, is_admin
         "#,
         set_clauses.join(", ")
     );
@@ -123,13 +130,12 @@ pub async fn update_user(
         // handle regeneration for new user email before binding it in
         // 1. get user by email to access the user id
 
-        let user_result = sqlx::query_as::<_, UserLookup>(
-            "SELECT id, email FROM users WHERE id = $1",
-        )
-            // user_id from request param
-            .bind(user_id)
-            .fetch_optional(&db_pool)
-            .await;
+        let user_result =
+            sqlx::query_as::<_, UserLookup>("SELECT id, email FROM users WHERE id = $1")
+                // user_id from request param
+                .bind(user_id)
+                .fetch_optional(&db_pool)
+                .await;
 
         let user = match user_result {
             Ok(Some(user)) => user,
@@ -159,15 +165,30 @@ pub async fn update_user(
             }
         };
 
+        // only an admin or owner of the profile can update
+        if session.user.email != user.email && !session.user.is_admin {
+            error!("UNAUTHORIZED USER UPDATE ATTEMPT!");
+
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(UpdateResponse {
+                    response_message: "You're not permit to perform this action for this user"
+                        .into(),
+                    response: None,
+                    error: Some("Unauthorized user update attempt".into()),
+                }),
+            );
+        }
+
         // 2. generate tokens
         let tokens = match generate_tokens(
             "auth",
             User {
                 id: user.id,
-                email: user.email
+                email: user.email,
             },
         )
-            .await
+        .await
         {
             Ok(tokens) => tokens,
             Err(e) => {
