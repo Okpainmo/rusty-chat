@@ -127,7 +127,7 @@ pub async fn register_user(
                     email: payload.email.clone(),
                 },
             )
-                .await
+            .await
             {
                 Ok(tokens) => tokens,
                 Err(e) => {
@@ -144,7 +144,6 @@ pub async fn register_user(
                 }
             };
 
-
             // now we can add the access and refresh tokens to the user data inside the db
             let result = sqlx::query_as::<_, UserProfile>(
                 r#"
@@ -160,13 +159,13 @@ pub async fn register_user(
                     refresh_token
             "#,
             )
-                .bind(&payload.email)
-                .bind(&tokens.access_token)
-                .bind(&tokens.refresh_token)
-                .bind("") // profile_image_url
-                // .bind(&tokens.one_time_password_token)
-                .fetch_one(&db_pool)
-                .await;
+            .bind(&payload.email)
+            .bind(&tokens.access_token)
+            .bind(&tokens.refresh_token)
+            .bind("") // profile_image_url
+            // .bind(&tokens.one_time_password_token)
+            .fetch_one(&db_pool)
+            .await;
 
             deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
 
@@ -204,7 +203,7 @@ pub async fn register_user(
                 Json(RegisterResponse {
                     response_message: "Failed to register user".to_string(),
                     response: None,
-                    error: Some(error_msg)
+                    error: Some(error_msg),
                 }),
             )
         }

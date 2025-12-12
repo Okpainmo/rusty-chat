@@ -18,6 +18,8 @@ pub struct UserProfile {
     profile_image_url: Option<String>,
     #[serde(skip_serializing)]
     password: String,
+    is_admin: bool,
+    is_active: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,7 +51,7 @@ pub async fn login_user(
 ) -> impl IntoResponse {
     // Fetch user by email
     let user_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image_url, password FROM users WHERE email = $1",
+        "SELECT id, full_name, email, profile_image_url, password, is_active, is_admin FROM users WHERE email = $1",
     )
     .bind(&payload.email)
     .fetch_optional(&db_pool)

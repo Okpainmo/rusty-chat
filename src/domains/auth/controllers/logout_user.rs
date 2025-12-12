@@ -49,28 +49,25 @@ pub async fn logout_user(
     .await;
 
     match user {
-        Ok(user) => {
+        Ok(user) => (
+            StatusCode::OK,
+            Json(LogoutResponse {
+                response_message: "Logout successful".to_string(),
+                error: None,
+                response: None,
+            }),
+        ),
+        Err(e) => {
+            error!("USER LOGOUT WAS UNSUCCESSFUL!");
+
             (
                 StatusCode::OK,
                 Json(LogoutResponse {
-                    response_message: "Logout successful".to_string(),
+                    response_message: "Logout failed!".to_string(),
                     error: None,
                     response: None,
                 }),
             )
-        },
-        Err(e) =>  {
-            error!("USER LOGOUT WAS UNSUCCESSFUL!");
-            
-            (
-                StatusCode::OK,
-                Json(LogoutResponse {
-                response_message: "Logout failed!".to_string(),
-                error: None,
-                response: None,
-                }),
-            )
         }
     }
-
 }
