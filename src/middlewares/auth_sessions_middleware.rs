@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json,
-    extract::{Request, State},
+    extract::Request,
     http::{StatusCode, header},
     middleware::Next,
     response::IntoResponse,
@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower_cookies::Cookies;
+use tracing::error;
 
-use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::User;
 
 // ============================================================================
@@ -37,8 +37,15 @@ pub struct UserProfile {
     pub id: i64,
     pub full_name: String,
     pub email: String,
-    pub refresh_token: Option<String>,
     pub profile_image_url: Option<String>,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub status: String,
+    pub last_seen: Option<String>,
+    #[serde(skip_serializing)]
+    pub password: String,
+    pub is_admin: bool,
+    pub is_active: bool,
 }
 
 #[derive(Clone)]
@@ -49,7 +56,7 @@ pub struct SessionState {
 
 #[derive(Clone, Debug)]
 pub struct SessionsMiddlewareOutput {
-    pub user: User,
+    pub user: UserProfile,
     pub session_status: String,
 }
 
@@ -63,8 +70,6 @@ pub async fn sessions_middleware(
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    // println!("hello session middleware");
-
     let state = Arc::new(SessionState {
         jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
         cookie_name: "rusty_chat_auth_cookie".to_string(),
@@ -78,6 +83,8 @@ pub async fn sessions_middleware(
         .get("email")
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| {
+            error!("EMAIL HEADER MISSING!");
+
             (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
@@ -87,13 +94,13 @@ pub async fn sessions_middleware(
             )
         })?;
 
-    // println!("email: { }", email);
-
     let authorization = req
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| {
+            error!("AUTHORIZATION HEADER MISSING!");
+
             (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
@@ -107,6 +114,8 @@ pub async fn sessions_middleware(
     // Validate cookie presence
     // ------------------------------------------------------------------------
     if cookies.get(&state.cookie_name).is_none() {
+        error!("AUTH COOKIE NOT FOUND!");
+
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
@@ -117,11 +126,23 @@ pub async fn sessions_middleware(
     }
 
     // ------------------------------------------------------------------------
-    // Fetch user from Postgres
+    // Fetch user from database
     // ------------------------------------------------------------------------
     let user = match sqlx::query_as::<_, UserProfile>(
         r#"
-        SELECT id, full_name, email, refresh_token, profile_image_url
+        SELECT
+            id,
+            full_name,
+            email,
+            refresh_token,
+            profile_image_url,
+            is_admin,
+            is_active,
+            access_token,
+            refresh_token,
+            status,
+            last_seen,
+            password
         FROM users
         WHERE email = $1
         "#,
@@ -131,7 +152,10 @@ pub async fn sessions_middleware(
     .await
     {
         Ok(Some(u)) => u,
+
         Ok(None) => {
+            error!("USER NOT FOUND!");
+
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
@@ -140,7 +164,10 @@ pub async fn sessions_middleware(
                 }),
             ));
         }
+
         Err(e) => {
+            error!("USER FETCH FAILED!");
+
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -151,10 +178,29 @@ pub async fn sessions_middleware(
         }
     };
 
+    // ------------------------------------------------------------------------
+    // Check active status
+    // ------------------------------------------------------------------------
+    if !user.is_active {
+        error!("INACTIVE USER ACCESS BLOCKED!");
+
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "Forbidden".to_string(),
+                response_message: "Your account is deactivated".to_string(),
+            }),
+        ));
+    }
+
+    // ------------------------------------------------------------------------
     // Ensure refresh/session token exists
+    // ------------------------------------------------------------------------
     let refresh = match &user.refresh_token {
         Some(t) => t.clone(),
         None => {
+            error!("REFRESH TOKEN MISSING!");
+
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
@@ -166,13 +212,15 @@ pub async fn sessions_middleware(
     };
 
     // ------------------------------------------------------------------------
-    // Verify REFRESH / SESSION JWT
+    // Validate refresh/session JWT
     // ------------------------------------------------------------------------
     let decoding_key = DecodingKey::from_secret(state.jwt_secret.as_bytes());
 
     match decode::<JwtClaims>(&refresh, &decoding_key, &Validation::default()) {
         Ok(token_data) => {
             if token_data.claims.email != user.email {
+                error!("USER EMAIL CLAIM MISMATCH!");
+
                 return Err((
                     StatusCode::UNAUTHORIZED,
                     Json(ErrorResponse {
@@ -182,24 +230,28 @@ pub async fn sessions_middleware(
                 ));
             }
 
-            let session_status = "USER SESSION IS ACTIVE".to_string();
-            // println!("{}", session_status);
-
-            // Store session user in request extensions
+            // Insert session data
             req.extensions_mut().insert(SessionsMiddlewareOutput {
-                user: User {
+                user: UserProfile {
                     id: user.id,
+                    full_name: user.full_name,
                     email: user.email.clone(),
+                    profile_image_url: user.profile_image_url,
+                    access_token: user.access_token,
+                    refresh_token: user.refresh_token,
+                    status: user.status,
+                    last_seen: user.last_seen,
+                    password: user.password,
+                    is_admin: user.is_admin,
+                    is_active: user.is_active,
                 },
-                session_status,
+                session_status: "USER SESSION IS ACTIVE".to_string(),
             });
         }
 
         Err(err) => match err.kind() {
             ErrorKind::ExpiredSignature => {
-                let session_status =
-                    format!("EXPIRED SESSION: session terminated for '{}'", user.email);
-                println!("{}", session_status);
+                error!("SESSION EXPIRED!");
 
                 return Err((
                     StatusCode::FORBIDDEN,
@@ -210,7 +262,10 @@ pub async fn sessions_middleware(
                     }),
                 ));
             }
+
             _ => {
+                error!("SESSION VERIFICATION FAILED!");
+
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -221,8 +276,6 @@ pub async fn sessions_middleware(
             }
         },
     }
-    //
-    // println!("{:#?}", &req);
-    // println!("{:#?}", &user);
+
     Ok(next.run(req).await)
 }

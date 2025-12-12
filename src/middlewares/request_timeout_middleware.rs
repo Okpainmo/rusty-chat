@@ -65,8 +65,8 @@ pub async fn timeout_middleware(
                 StatusCode::REQUEST_TIMEOUT,
                 Json(TimeoutErrorResponse {
                     error: "Request Timeout".to_string(),
-                    response_message:
-                    "Request exceeded the maximum allowed time of 60 seconds".to_string(),
+                    response_message: "Request exceeded the maximum allowed time of 60 seconds"
+                        .to_string(),
                 }),
             ))
         }

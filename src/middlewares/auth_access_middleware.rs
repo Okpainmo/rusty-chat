@@ -1,4 +1,4 @@
-use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
+use crate::middlewares::auth_sessions_middleware::{SessionsMiddlewareOutput, UserProfile};
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::{
@@ -14,6 +14,8 @@ use sqlx;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower_cookies::{Cookie, Cookies};
+use tracing::error;
+
 // ============================================================================
 // Types/Structures
 // ============================================================================
@@ -30,8 +32,6 @@ pub struct JwtClaims {
 pub struct AppState {
     pub jwt_secret: String,
     pub cookie_name: String,
-    // Add database connection pool here
-    // pub db: DatabasePool,
 }
 
 #[derive(Clone, Debug)]
@@ -42,14 +42,21 @@ pub struct SessionInfo {
     pub session_status: String,
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct UserProfile {
-    // #[sqlx(rename = "id")]
-    id: i64,
-    full_name: String,
-    email: String,
-    profile_image_url: Option<String>,
-}
+// #[derive(Debug, Serialize, sqlx::FromRow, Clone)]
+// pub struct UserProfile {
+//     pub id: i64,
+//     pub full_name: String,
+//     pub email: String,
+//     pub profile_image_url: Option<String>,
+//     pub access_token: Option<String>,
+//     pub refresh_token: Option<String>,
+//     pub status: String,
+//     pub last_seen: Option<String>,
+//     #[serde(skip_serializing)]
+//     pub password: String,
+//     pub is_admin: bool,
+//     pub is_active: bool,
+// }
 
 #[derive(Debug, Serialize)]
 pub struct ErrorResponse {
@@ -69,13 +76,12 @@ enum TokenStatus {
     Invalid(String),
 }
 
-fn verify_access_token(token: &str, secret: &str, user: &User) -> TokenStatus {
+fn verify_access_token(token: &str, secret: &str, user: &UserProfile) -> TokenStatus {
     let validation = Validation::default();
     let decoding_key = DecodingKey::from_secret(secret.as_bytes());
 
     match decode::<JwtClaims>(token, &decoding_key, &validation) {
         Ok(token_data) => {
-            // Verify email matches
             if token_data.claims.email != user.email {
                 return TokenStatus::Invalid("User credentials do not match".to_string());
             }
@@ -96,23 +102,21 @@ fn verify_access_token(token: &str, secret: &str, user: &User) -> TokenStatus {
 // ============================================================================
 
 pub async fn access_middleware(
-    // State(state): State<Arc<AppState>>, // see state declaration inside of main.rs
-    // axum::Extension(session_info): axum::Extension<SessionInfo>,
     cookies: Cookies,
     Extension(db_pool): Extension<PgPool>,
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    // println!("hello access middleware");
-    // println!("hello access middleware: {:#?}", {session_info});
-
     let state = Arc::new(AppState {
         jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
         cookie_name: "rusty_chat_auth_cookie".to_string(),
     });
 
-    // Check for auth cookie - reject the request immediately if auth cookie is missing
+    // ----------------------------------------------------------
+    // AUTH COOKIE CHECK
+    // ----------------------------------------------------------
     let auth_cookie = cookies.get(&state.cookie_name).ok_or_else(|| {
+        error!("MISSING AUTH COOKIE!");
         (
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
@@ -122,12 +126,14 @@ pub async fn access_middleware(
         )
     })?;
 
-    // Get user from request extensions (should be set by session middleware)
+    // ----------------------------------------------------------
+    // SESSION MIDDLEWARE OUTPUT CHECK
+    // ----------------------------------------------------------
     let sessions_middleware_output = req
         .extensions()
         .get::<SessionsMiddlewareOutput>()
-        // .cloned()
         .ok_or_else(|| {
+            error!("SESSION MIDDLEWARE OUTPUT MISSING!");
             (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
@@ -138,14 +144,15 @@ pub async fn access_middleware(
         })?
         .clone();
 
-    // println!("session middleware output 1 {:#?}", req);
-
-    // Extract authorization header
+    // ----------------------------------------------------------
+    // AUTH HEADER CHECK
+    // ----------------------------------------------------------
     let auth_header = req
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .ok_or_else(|| {
+            error!("AUTHORIZATION HEADER MISSING!");
             (
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
@@ -155,8 +162,11 @@ pub async fn access_middleware(
             )
         })?;
 
-    // Verify Bearer token format
+    // ----------------------------------------------------------
+    // BEARER FORMAT CHECK
+    // ----------------------------------------------------------
     if !auth_header.starts_with("Bearer ") {
+        error!("INVALID BEARER FORMAT!");
         return Err((
             StatusCode::FORBIDDEN,
             Json(ErrorResponse {
@@ -169,8 +179,9 @@ pub async fn access_middleware(
 
     let access_token = auth_header.trim_start_matches("Bearer ");
 
-    // println!("session middleware output 1b {:#?}", sessions_middleware_output.user);
-
+    // ----------------------------------------------------------
+    // TOKEN GENERATION (FOR RENEWAL)
+    // ----------------------------------------------------------
     let tokens = match generate_tokens(
         "auth",
         User {
@@ -181,103 +192,36 @@ pub async fn access_middleware(
     .await
     {
         Ok(tokens) => tokens,
-        Err(e) => {
+        Err(_) => {
+            error!("TOKEN GENERATION ERROR!");
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     response_message: "Failed to generate tokens".to_string(),
-                    error: format!("Token generation error: {}", e.to_string()),
+                    error: "Token generation error".to_string(),
                 }),
             ));
         }
     };
 
-    // Verify and process access token
+    // ----------------------------------------------------------
+    // ACCESS TOKEN VERIFICATION
+    // ----------------------------------------------------------
     match verify_access_token(
         access_token,
         &state.jwt_secret,
         &sessions_middleware_output.user,
     ) {
         TokenStatus::Valid => {
-            /* Token is valid, renew tokens */
-
-            // Update user in database
-            let _ = sqlx::query_as::<_, UserProfile>(
-                r#"
-                    UPDATE users
-                    SET
-                        access_token = $1,
-                        refresh_token = $2,
-                        updated_at = NOW()
-                    WHERE email = $3
-                "#,
-            )
-            .bind(&tokens.access_token)
-            .bind(&tokens.refresh_token)
-            .bind(&sessions_middleware_output.user.email)
-            .fetch_one(&db_pool)
-            .await;
-
-            // Deploy new cookie
-            deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
-
-            // Store session info in request extensions
-            {
-                req.extensions_mut().insert(SessionInfo {
-                    user: sessions_middleware_output.user.clone(),
-                    new_access_token: tokens.access_token.unwrap().to_string(),
-                    new_refresh_token: tokens.refresh_token.unwrap().to_string(),
-                    session_status: format!(
-                        "ACTIVE ACCESS WITH ACTIVE SESSION: access and session renewed for '{}'",
-                        sessions_middleware_output.user.email
-                    ),
-                });
-            }
-
-            // println!("Active access: tokens renewed for '{}'", sessions_middleware_output.user.email);
+            // normal path (no log)
         }
 
         TokenStatus::Expired => {
-            /* The fact that the request passes the session middleware that is placed before this access middleware,
-            confirms that the session is still valid even though the access token is currently expired. Hence, we renew the
-            tokens */
-
-            // Update user in database
-            let _ = sqlx::query_as::<_, UserProfile>(
-                r#"
-                    UPDATE users
-                    SET
-                        access_token = $1,
-                        refresh_token = $2,
-                        updated_at = NOW()
-                    WHERE email = $3
-                "#,
-            )
-            .bind(&tokens.access_token)
-            .bind(&tokens.refresh_token)
-            .bind(&sessions_middleware_output.user.email)
-            .fetch_one(&db_pool)
-            .await;
-
-            // Deploy new cookie
-            deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
-
-            // Store session info in request extensions
-            {
-                req.extensions_mut().insert(SessionInfo {
-                    user: sessions_middleware_output.user.clone(),
-                    new_access_token: tokens.access_token.unwrap().to_string(),
-                    new_refresh_token: tokens.refresh_token.unwrap().to_string(),
-                    session_status: format!(
-                        "EXPIRED ACCESS WITH ACTIVE SESSION: access and session renewed for '{}'",
-                        sessions_middleware_output.user.email
-                    ),
-                });
-            }
-
-            // println!("Expired access: tokens renewed for '{}'", sessions_middleware_output.user.email);
+            // normal path (no log)
         }
+
         TokenStatus::Invalid(msg) => {
+            error!("INVALID ACCESS TOKEN!");
             return Err((
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
@@ -288,7 +232,8 @@ pub async fn access_middleware(
         }
     }
 
-    // println!("session middleware output 2 {:#?}", req);
-
+    // ----------------------------------------------------------
+    // NORMAL FLOW (NO LOGGING)
+    // ----------------------------------------------------------
     Ok(next.run(req).await)
 }
