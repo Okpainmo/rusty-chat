@@ -1,0 +1,4 @@
+-- Add migration script here
+ALTER TABLE users
+    ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
