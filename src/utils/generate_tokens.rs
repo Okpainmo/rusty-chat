@@ -21,6 +21,8 @@ pub struct Claims {
 pub struct User {
     pub id: i64,
     pub email: String,
+    // pub is_admin: Option<bool>,
+    // pub is_active: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
