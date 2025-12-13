@@ -1,5 +1,5 @@
 use crate::middlewares::auth_access_middleware::{ErrorResponse, SessionInfo};
-use axum::extract::Request;
+use axum::extract::{Request, State};
 use axum::{
     Json,
     extract::{Extension, Path},
@@ -9,6 +9,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::error;
+use crate::AppState;
 // use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -42,8 +43,9 @@ pub struct UsersResponse {
 }
 
 pub async fn get_all_users(
-    Extension(db_pool): Extension<PgPool>,
+    // Extension(db_pool): Extension<PgPool>,
     // req: Request
+    State(state): State<AppState>,
 ) -> impl IntoResponse {
     // let access_middleware_output = req
     //     .extensions()
@@ -65,7 +67,7 @@ pub async fn get_all_users(
     let users_result = sqlx::query_as::<_, UserProfile>(
         "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen, is_active, is_admin  FROM users"
     )
-    .fetch_all(&db_pool)
+    .fetch_all(&state.db)
     .await;
 
     match users_result {

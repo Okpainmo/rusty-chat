@@ -13,10 +13,12 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::error;
+use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserPayload {
@@ -57,7 +59,8 @@ pub struct UpdateResponse {
 
 pub async fn update_user(
     cookies: Cookies,
-    Extension(db_pool): Extension<PgPool>,
+    // Extension(db_pool): Extension<PgPool>,
+    State(state): State<AppState>,
     Extension(session): Extension<SessionsMiddlewareOutput>,
     Path(user_id): Path<i64>,
     Json(payload): Json<UpdateUserPayload>,
@@ -134,7 +137,7 @@ pub async fn update_user(
             sqlx::query_as::<_, UserLookup>("SELECT id, email FROM users WHERE id = $1")
                 // user_id from request param
                 .bind(user_id)
-                .fetch_optional(&db_pool)
+                .fetch_optional(&state.db)
                 .await;
 
         let user = match user_result {
@@ -172,7 +175,7 @@ pub async fn update_user(
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(UpdateResponse {
-                    response_message: "You're not permit to perform this action for this user"
+                    response_message: "You're not permitted to perform this action for this user"
                         .into(),
                     response: None,
                     error: Some("Unauthorized user update attempt".into()),
@@ -249,7 +252,7 @@ pub async fn update_user(
     // println!("set_clauses: {:?}", set_clauses.join(", "));
 
     // Execute query
-    let result = query_builder.fetch_optional(&db_pool).await;
+    let result = query_builder.fetch_optional(&state.db).await;
 
     match result {
         Ok(Some(updated_user)) => (
