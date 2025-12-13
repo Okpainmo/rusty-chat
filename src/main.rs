@@ -5,6 +5,11 @@ use std::net::SocketAddr;
 // environmental variables...
 use dotenvy;
 use std::env;
+
+// AWS S3
+use aws_sdk_s3::Client;
+use crate::utils::file_upload_handler::S3AppState;
+
 use tracing::info;
 // logging init with the tracing crate
 use tracing_subscriber::fmt::time::SystemTime;
@@ -13,6 +18,7 @@ use tracing_subscriber::fmt::time::SystemTime;
 mod utils;
 // db import
 mod db;
+use sqlx::PgPool;
 use crate::utils::load_env::load_env;
 use db::connect_postgres::connect_pg;
 
@@ -20,10 +26,18 @@ use db::connect_postgres::connect_pg;
 mod domains;
 use crate::domains::auth::router::auth_routes;
 use crate::domains::user::router::user_routes;
+use crate::domains::admin::router::admin_routes;
+
 
 mod middlewares;
 use crate::middlewares::logging_middleware::logging_middleware;
 use crate::middlewares::request_timeout_middleware::timeout_middleware;
+
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub db: PgPool,
+    pub s3: S3AppState,
+}
 
 fn initialize_logging() {
     tracing_subscriber::fmt()
@@ -38,11 +52,18 @@ fn initialize_logging() {
 async fn main() {
     load_env();
     initialize_logging();
-    // info!("DB = { }", std::env::var("DATABASE_URL").unwrap().to_string());
 
-    // println!("Environment: {}", env);
-    // println!("Server running on port {}", port);
-    // Build router
+    // Initialize AWS S3 config
+    let config = aws_config::load_from_env().await;
+    let s3_client = Client::new(&config);
+
+    let bucket_name = std::env::var("AWS_S3_BUCKET_NAME")
+        .expect("S3_BUCKET_NAME must be set");
+
+    let s3_state = S3AppState {
+        s3_client,
+        bucket_name,
+    };
 
     // let port = env::var("PORT").unwrap_or("8000".to_string());
     let environment = env::var("DEPLOY_ENV").unwrap_or("development".to_string());
@@ -56,13 +77,20 @@ async fn main() {
 
     let db_pool = connect_pg(database_url.clone()).await;
 
+    let state = AppState {
+        db: db_pool,
+        s3: s3_state
+    };
+
     let app = Router::new()
-        .nest("/api/v1", auth_routes())
-        .nest("/api/v1", user_routes())
-        .layer(middleware::from_fn(timeout_middleware))
+        .nest("/api/v1", auth_routes(&state))
+        .nest("/api/v1", user_routes(&state))
+        .nest("/api/v1", admin_routes(&state))
         .layer(middleware::from_fn(logging_middleware))
-        .layer(Extension(db_pool));
-    // .nest("/users", user_routes());
+        .layer(middleware::from_fn(timeout_middleware))
+        .with_state(state);
+
+    // .layer(Extension(db_pool));
 
     // Server address
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
