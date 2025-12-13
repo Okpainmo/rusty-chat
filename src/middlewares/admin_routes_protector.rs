@@ -1,0 +1,159 @@
+use crate::middlewares::auth_sessions_middleware::{SessionsMiddlewareOutput, UserProfile};
+use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
+use crate::utils::generate_tokens::{User, generate_tokens};
+use axum::{
+    Extension, Json,
+    extract::{Request, State},
+    http::{StatusCode, header},
+    middleware::Next,
+    response::{IntoResponse, Response},
+};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use serde::{Deserialize, Serialize};
+use sqlx;
+use sqlx::PgPool;
+use std::sync::Arc;
+use tower_cookies::{Cookie, Cookies};
+use tracing::error;
+
+// ============================================================================
+// Types/Structures
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JwtClaims {
+    pub id: i64,
+    pub email: String,
+    pub exp: usize,
+    pub iat: usize,
+}
+
+#[derive(Clone)]
+pub struct MiddlewareState {
+    pub jwt_secret: String,
+    pub cookie_name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct SessionInfo {
+    pub user: User,
+    pub new_access_token: String,
+    pub new_refresh_token: String,
+    pub session_status: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub response_message: String,
+}
+
+pub struct AuthTokens {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub auth_cookie: String,
+}
+
+enum TokenStatus {
+    Valid,
+    Expired,
+    Invalid(String),
+}
+
+// ============================================================================
+// Middleware Implementation
+// ============================================================================
+
+pub async fn admin_routes_protector(
+    State(state): State<crate::AppState>,
+    mut req: Request,
+    next: Next,
+) -> impl IntoResponse {
+    let email = match req
+        .headers()
+        .get("email")
+        .and_then(|h| h.to_str().ok())
+    {
+        Some(user_email) => {
+            user_email
+        },
+        None => {
+            error!("FAILED TO EXTRACT EMAIL HEADER ON ADMIN ROUTE REQUEST!");
+
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "Unsuccessful request".to_string(),
+                    response_message: "Failed to extract email header on request".to_string(),
+                }),
+            ));
+        }
+    };
+
+    match sqlx::query_as::<_, UserProfile>(
+        r#"
+        SELECT
+            id,
+            full_name,
+            email,
+            refresh_token,
+            profile_image_url,
+            is_admin,
+            is_active,
+            access_token,
+            refresh_token,
+            status,
+            last_seen,
+            password
+        FROM users
+        WHERE email = $1
+        "#,
+    )
+        .bind(&email)
+        .fetch_optional(&state.db)
+        .await
+    {
+        Ok(Some(u)) => {
+            if !u.is_admin || !u.is_active {
+                error!("ADMIN ROUTE HIT BY UNAUTHORIZED USER!");
+
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(ErrorResponse {
+                        error: "Forbidden".to_string(),
+                        response_message: "Only active admins can perform this action".to_string(),
+                    }),
+                ));
+            }
+        },
+
+        Ok(None) => {
+            error!("USER NOT FOUND!");
+
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "Not Found".to_string(),
+                    response_message: format!("User '{}' not found", email),
+                }),
+            ));
+        }
+
+        Err(e) => {
+            error!("USER FETCH FAILED!");
+
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DB Error".to_string(),
+                    response_message: e.to_string(),
+                }),
+            ));
+        }
+    };
+
+    // ----------------------------------------------------------
+    // NORMAL FLOW (NO LOGGING)
+    // ----------------------------------------------------------
+    Ok(next.run(req).await)
+}

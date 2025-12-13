@@ -29,7 +29,7 @@ pub struct JwtClaims {
 }
 
 #[derive(Clone)]
-pub struct AppState {
+pub struct MiddlewareState {
     pub jwt_secret: String,
     pub cookie_name: String,
 }
@@ -102,20 +102,20 @@ fn verify_access_token(token: &str, secret: &str, user: &UserProfile) -> TokenSt
 // ============================================================================
 
 pub async fn access_middleware(
+    // State(state): State<crate::AppState>,
     cookies: Cookies,
-    Extension(db_pool): Extension<PgPool>,
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    let state = Arc::new(AppState {
+    let session_state = MiddlewareState {
         jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
         cookie_name: "rusty_chat_auth_cookie".to_string(),
-    });
+    };
 
     // ----------------------------------------------------------
     // AUTH COOKIE CHECK
     // ----------------------------------------------------------
-    let auth_cookie = cookies.get(&state.cookie_name).ok_or_else(|| {
+    let auth_cookie = cookies.get(&session_state.cookie_name).ok_or_else(|| {
         error!("MISSING AUTH COOKIE!");
         (
             StatusCode::UNAUTHORIZED,
@@ -209,7 +209,7 @@ pub async fn access_middleware(
     // ----------------------------------------------------------
     match verify_access_token(
         access_token,
-        &state.jwt_secret,
+        &session_state.jwt_secret,
         &sessions_middleware_output.user,
     ) {
         TokenStatus::Valid => {

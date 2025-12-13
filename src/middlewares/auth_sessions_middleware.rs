@@ -9,6 +9,7 @@ use jsonwebtoken::{DecodingKey, Validation, decode, errors::ErrorKind};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
+use axum::extract::State;
 use tower_cookies::Cookies;
 use tracing::error;
 
@@ -49,7 +50,7 @@ pub struct UserProfile {
 }
 
 #[derive(Clone)]
-pub struct SessionState {
+pub struct MiddlewareState {
     pub jwt_secret: String,
     pub cookie_name: String,
 }
@@ -65,15 +66,16 @@ pub struct SessionsMiddlewareOutput {
 // ============================================================================
 
 pub async fn sessions_middleware(
+    // Extension(db_pool): Extension<PgPool>,
+    State(state): State<crate::AppState>,
     cookies: Cookies,
-    Extension(db_pool): Extension<PgPool>,
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    let state = Arc::new(SessionState {
+    let session_state = MiddlewareState {
         jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
         cookie_name: "rusty_chat_auth_cookie".to_string(),
-    });
+    };
 
     // ------------------------------------------------------------------------
     // Extract required headers
@@ -113,7 +115,7 @@ pub async fn sessions_middleware(
     // ------------------------------------------------------------------------
     // Validate cookie presence
     // ------------------------------------------------------------------------
-    if cookies.get(&state.cookie_name).is_none() {
+    if cookies.get(&session_state.cookie_name).is_none() {
         error!("AUTH COOKIE NOT FOUND!");
 
         return Err((
@@ -148,7 +150,7 @@ pub async fn sessions_middleware(
         "#,
     )
     .bind(&email)
-    .fetch_optional(&db_pool)
+    .fetch_optional(&state.db)
     .await
     {
         Ok(Some(u)) => u,
@@ -214,7 +216,7 @@ pub async fn sessions_middleware(
     // ------------------------------------------------------------------------
     // Validate refresh/session JWT
     // ------------------------------------------------------------------------
-    let decoding_key = DecodingKey::from_secret(state.jwt_secret.as_bytes());
+    let decoding_key = DecodingKey::from_secret(session_state.jwt_secret.as_bytes());
 
     match decode::<JwtClaims>(&refresh, &decoding_key, &Validation::default()) {
         Ok(token_data) => {
