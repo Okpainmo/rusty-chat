@@ -1,6 +1,7 @@
 use crate::domains::auth::controllers::register_user::RegisterResponse;
 use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
+use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 // utils import
@@ -8,6 +9,7 @@ use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::verification_handler::verification_handler; // your existing password verification function
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use tracing::error;
+use crate::AppState;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct UserProfile {
@@ -46,7 +48,8 @@ pub struct LoginResponse {
 
 pub async fn login_user(
     cookies: Cookies,
-    Extension(db_pool): Extension<PgPool>,
+    // Extension(db_pool): Extension<PgPool>,
+    State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
     // Fetch user by email
@@ -54,7 +57,7 @@ pub async fn login_user(
         "SELECT id, full_name, email, profile_image_url, password, is_active, is_admin FROM users WHERE email = $1",
     )
     .bind(&payload.email)
-    .fetch_optional(&db_pool)
+    .fetch_optional(&state.db)
     .await;
 
     let user = match user_result {
@@ -125,7 +128,7 @@ pub async fn login_user(
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
             .bind(&payload.email)
-            .fetch_one(&db_pool)
+            .fetch_one(&state.db)
             .await;
 
             (

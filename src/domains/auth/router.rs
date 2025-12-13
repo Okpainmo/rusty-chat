@@ -4,8 +4,9 @@ use crate::domains::auth::controllers::logout_user::logout_user;
 use crate::domains::auth::controllers::register_user::register_user;
 use axum::{Extension, Router, routing::post};
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+use crate::AppState;
 
-pub fn auth_routes() -> Router {
+pub fn auth_routes(state: &AppState) -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register_user))
         .route("/auth/login", post(login_user))

@@ -1,6 +1,7 @@
 use crate::utils::generate_tokens::User;
 use crate::utils::generate_tokens::generate_tokens;
 use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
+use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{error, info};
@@ -9,6 +10,7 @@ use tracing::{error, info};
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::hashing_handler::hashing_handler;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+use crate::AppState;
 // pub struct User {
 //     pub id: i64,
 //     pub email: String,
@@ -48,7 +50,8 @@ pub struct RegisterResponse {
 
 pub async fn register_user(
     cookies: Cookies,
-    Extension(db_pool): Extension<PgPool>,
+    // Extension(db_pool): Extension<PgPool>,
+    State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>, // this should always come last else your domain(auth) router might throw an error
 ) -> impl IntoResponse {
     // Hash the password
@@ -72,7 +75,7 @@ pub async fn register_user(
     let email_exists: Option<i64> =
         sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE email = $1")
             .bind(&payload.email)
-            .fetch_optional(&db_pool)
+            .fetch_optional(&state.db)
             .await
             .unwrap_or(None)
             .flatten();
@@ -115,7 +118,7 @@ pub async fn register_user(
     .bind(&full_name)
     .bind("") // profile_image_url
     // .bind(&tokens.one_time_password_token)
-    .fetch_one(&db_pool)
+    .fetch_one(&state.db)
     .await;
 
     match result {
@@ -164,7 +167,7 @@ pub async fn register_user(
             .bind(&tokens.refresh_token)
             .bind("") // profile_image_url
             // .bind(&tokens.one_time_password_token)
-            .fetch_one(&db_pool)
+            .fetch_one(&state.db)
             .await;
 
             deploy_auth_cookie(cookies, tokens.auth_cookie.unwrap()).await;
