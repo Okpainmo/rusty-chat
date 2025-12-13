@@ -72,7 +72,7 @@ sqlx migrate add <migration_name>
 E.g.
 
 ```shell
-sqlx migrate init
+sqlx migrate add init
 ```
 
 5. Migrate(Sync with the DB) 
