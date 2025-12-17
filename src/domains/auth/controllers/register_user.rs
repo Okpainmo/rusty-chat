@@ -30,7 +30,7 @@ pub struct UserProfile {
     user_id: i64,
     full_name: String,
     email: String,
-    profile_image_url: String,
+    profile_image: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -103,14 +103,14 @@ pub async fn register_user(
                     email,
                     password,
                     full_name,
-                    profile_image_url
+                    profile_image
                 )
                 VALUES ($1, $2, $3, $4)
                 RETURNING
                     id,
                     full_name,
                     email,
-                    profile_image_url
+                    profile_image
             "#,
     )
     .bind(&payload.email)

@@ -17,7 +17,7 @@ pub struct UserProfile {
     user_id: i64,
     full_name: String,
     email: String,
-    profile_image_url: Option<String>,
+    profile_image: Option<String>,
     #[serde(skip_serializing)]
     password: String,
     is_admin: bool,
@@ -52,9 +52,10 @@ pub async fn login_user(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
+    println!("state: {:?}", state);
     // Fetch user by email
     let user_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image_url, password, is_active, is_admin FROM users WHERE email = $1",
+        "SELECT id, full_name, email, profile_image, password, is_active, is_admin FROM users WHERE email = $1",
     )
     .bind(&payload.email)
     .fetch_optional(&state.db)
