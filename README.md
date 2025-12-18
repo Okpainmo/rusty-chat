@@ -23,7 +23,7 @@ cargo build
 or install latest versions individually
 
 ```shell
-cargo add axum tokio --features tokio/full serde --features serde/derive serde_json dotenvy sqlx argon2 rand sqlx-cli --no-default-features --features postgres tracing tracing-subscriber jsonwebtoken --features rust_crypto chrono tower-cookies time aws-config --features behavior-version-latest aws-sdk-s3 --features behavior-version-latest
+cargo add axum tokio --features tokio/full serde --features serde/derive serde_json dotenvy sqlx argon2 rand sqlx-cli --no-default-features --features postgres tracing tracing-subscriber jsonwebtoken --features rust_crypto chrono tower-cookies time aws-config --features behavior-version-latest aws-sdk-s3 --features behavior-version-latest aws-credential-types --features hardcoded-credentials
 ```
 
 3. Start the local database via Docker
