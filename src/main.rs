@@ -7,8 +7,10 @@ use dotenvy;
 use std::env;
 
 // AWS S3
-use aws_sdk_s3::Client;
 use crate::utils::file_upload_handler::S3AppState;
+use aws_config::Region;
+use aws_credential_types::Credentials;
+use aws_sdk_s3::Client;
 
 use tracing::info;
 // logging init with the tracing crate
@@ -18,16 +20,15 @@ use tracing_subscriber::fmt::time::SystemTime;
 mod utils;
 // db import
 mod db;
-use sqlx::PgPool;
 use crate::utils::load_env::load_env;
 use db::connect_postgres::connect_pg;
+use sqlx::PgPool;
 
 // controllers import
 mod domains;
+use crate::domains::admin::router::admin_routes;
 use crate::domains::auth::router::auth_routes;
 use crate::domains::user::router::user_routes;
-use crate::domains::admin::router::admin_routes;
-
 
 mod middlewares;
 use crate::middlewares::logging_middleware::logging_middleware;
@@ -53,12 +54,26 @@ async fn main() {
     load_env();
     initialize_logging();
 
+    let access_key_id = env::var("AWS_ACCESS_KEY").unwrap();
+    let secret_access_key = env::var("AWS_SECRET_ACCESS_KEY").unwrap();
+    let aws_url = env::var("AWS_BUCKET_URL").unwrap();
+    let aws_region = env::var("AWS_S3_BUCKET_REGION").expect("AWS_S3_BUCKET_REGION must be set");
+
+    // note here that the "None" is in place of a session token
+    let creds = Credentials::from_keys(access_key_id, secret_access_key, None);
+
+    let config = aws_config::from_env()
+        // .endpoint_url(aws_url)
+        .region(Region::new(aws_region))
+        .credentials_provider(creds)
+        .load()
+        .await;
+
     // Initialize AWS S3 config
-    let config = aws_config::load_from_env().await;
+    // let config = aws_config::load_from_env().await;
     let s3_client = Client::new(&config);
 
-    let bucket_name = std::env::var("AWS_S3_BUCKET_NAME")
-        .expect("S3_BUCKET_NAME must be set");
+    let bucket_name = std::env::var("AWS_S3_BUCKET_NAME").expect("AWS_S3_BUCKET_NAME must be set");
 
     let s3_state = S3AppState {
         s3_client,
@@ -79,7 +94,7 @@ async fn main() {
 
     let state = AppState {
         db: db_pool,
-        s3: s3_state
+        s3: s3_state,
     };
 
     let app = Router::new()
