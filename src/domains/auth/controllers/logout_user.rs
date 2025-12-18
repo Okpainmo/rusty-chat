@@ -1,11 +1,11 @@
+use crate::AppState;
 use crate::utils::generate_tokens::{User, generate_tokens};
-use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
 use axum::extract::State;
+use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::{Cookie, Cookies};
 use tracing::{error, info};
-use crate::AppState;
 
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
@@ -68,24 +68,22 @@ pub async fn logout_user(
                 is_logged_out
             "#,
     )
-        .bind("") // profile_image_url
-        .bind("") // profile_image_url
-        .bind(true)
-        .bind(&params.user_email)
-        .fetch_one(&state.db)
-        .await;
+    .bind("") // profile_image_url
+    .bind("") // profile_image_url
+    .bind(true)
+    .bind(&params.user_email)
+    .fetch_one(&state.db)
+    .await;
 
     match user {
-        Ok(user) => {
-            (
-                StatusCode::OK,
-                Json(LogoutResponse {
-                    response_message: "Logout successful".to_string(),
-                    error: None,
-                    response: Some(user),
-                }),
-            )
-        }
+        Ok(user) => (
+            StatusCode::OK,
+            Json(LogoutResponse {
+                response_message: "Logout successful".to_string(),
+                error: None,
+                response: Some(user),
+            }),
+        ),
         Err(e) => {
             error!("USER LOGOUT WAS UNSUCCESSFUL!");
 

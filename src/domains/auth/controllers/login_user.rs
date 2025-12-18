@@ -1,15 +1,15 @@
 use crate::domains::auth::controllers::register_user::RegisterResponse;
 use crate::utils::generate_tokens::{User, generate_tokens};
-use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use axum::extract::State;
+use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 // utils import
+use crate::AppState;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::verification_handler::verification_handler; // your existing password verification function
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 use tracing::error;
-use crate::AppState;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct UserProfile {
@@ -52,7 +52,6 @@ pub async fn login_user(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    println!("state: {:?}", state);
     // Fetch user by email
     let user_result = sqlx::query_as::<_, UserProfile>(
         "SELECT id, full_name, email, profile_image, password, is_active, is_admin FROM users WHERE email = $1",

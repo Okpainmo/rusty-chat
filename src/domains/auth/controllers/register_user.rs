@@ -1,16 +1,16 @@
 use crate::utils::generate_tokens::User;
 use crate::utils::generate_tokens::generate_tokens;
-use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use axum::extract::State;
+use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{error, info};
 // utils import
 // use crate::utils::error_handlers::coded_error_handlers::print_error;
+use crate::AppState;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::hashing_handler::hashing_handler;
 use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
-use crate::AppState;
 // pub struct User {
 //     pub id: i64,
 //     pub email: String,
