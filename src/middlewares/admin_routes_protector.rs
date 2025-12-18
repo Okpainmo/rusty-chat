@@ -69,14 +69,8 @@ pub async fn admin_routes_protector(
     mut req: Request,
     next: Next,
 ) -> impl IntoResponse {
-    let email = match req
-        .headers()
-        .get("email")
-        .and_then(|h| h.to_str().ok())
-    {
-        Some(user_email) => {
-            user_email
-        },
+    let email = match req.headers().get("email").and_then(|h| h.to_str().ok()) {
+        Some(user_email) => user_email,
         None => {
             error!("FAILED TO EXTRACT EMAIL HEADER ON ADMIN ROUTE REQUEST!");
 
@@ -109,9 +103,9 @@ pub async fn admin_routes_protector(
         WHERE email = $1
         "#,
     )
-        .bind(&email)
-        .fetch_optional(&state.db)
-        .await
+    .bind(&email)
+    .fetch_optional(&state.db)
+    .await
     {
         Ok(Some(u)) => {
             if !u.is_admin || !u.is_active {
@@ -125,7 +119,7 @@ pub async fn admin_routes_protector(
                     }),
                 ));
             }
-        },
+        }
 
         Ok(None) => {
             error!("USER NOT FOUND!");

@@ -1,3 +1,4 @@
+use axum::extract::State;
 use axum::{
     Extension, Json,
     extract::Request,
@@ -9,7 +10,6 @@ use jsonwebtoken::{DecodingKey, Validation, decode, errors::ErrorKind};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
-use axum::extract::State;
 use tower_cookies::Cookies;
 use tracing::error;
 
