@@ -1,3 +1,4 @@
+use crate::AppState;
 use crate::middlewares::auth_access_middleware::ErrorResponse;
 use crate::middlewares::auth_access_middleware::SessionInfo;
 use axum::extract::{Request, State};
@@ -10,7 +11,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{error, info};
-use crate::AppState;
 // use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]

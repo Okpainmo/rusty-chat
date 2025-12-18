@@ -7,21 +7,21 @@ use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::{User, generate_tokens};
 use crate::utils::hashing_handler::hashing_handler;
 
+use crate::AppState;
+use crate::utils::file_upload_handler::upload_file;
+use axum::extract::State;
+use axum::extract::multipart::{Field, MultipartError};
 use axum::{
-    extract::Multipart,
     Json,
+    extract::Multipart,
     extract::{Extension, Path, Request},
     http::StatusCode,
     response::IntoResponse,
 };
-use axum::extract::multipart::{Field, MultipartError};
-use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::error;
-use crate::AppState;
-use crate::utils::file_upload_handler::upload_file;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateProfileImagePayload {
@@ -68,12 +68,11 @@ pub async fn update_profile_image(
 ) -> impl IntoResponse {
     // extract file for upload
     // let field: Result<Option<Field>, MultipartError> = multipart
-    let user_result =
-        sqlx::query_as::<_, UserLookup>("SELECT id, email FROM users WHERE id = $1")
-            // user_id from request param
-            .bind(user_id)
-            .fetch_optional(&state.db)
-            .await;
+    let user_result = sqlx::query_as::<_, UserLookup>("SELECT id, email FROM users WHERE id = $1")
+        // user_id from request param
+        .bind(user_id)
+        .fetch_optional(&state.db)
+        .await;
 
     let user = match user_result {
         Ok(Some(user)) => user,
@@ -146,7 +145,6 @@ pub async fn update_profile_image(
         }
     };
 
-
     let file_url = match upload_file(State(&state), file, &user_id).await {
         Ok(file_url) => file_url,
         Err(e) => {
@@ -159,9 +157,9 @@ pub async fn update_profile_image(
                     response: None,
                     error: Some(format!("Database error: {}", e)),
                 }),
-            )
+            );
         }
-     };
+    };
 
     let res = sqlx::query_as::<_, UserProfile>(
         r#"
@@ -173,11 +171,10 @@ pub async fn update_profile_image(
             RETURNING *
             "#,
     )
-        .bind(file_url)
-        .bind(user_id)
-        .fetch_one(&state.db)
-        .await;
-
+    .bind(file_url)
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await;
 
     match res {
         Ok(updated_user) => (

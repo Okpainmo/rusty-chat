@@ -7,20 +7,20 @@ use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::{User, generate_tokens};
 use crate::utils::hashing_handler::hashing_handler;
 
+use crate::AppState;
+use crate::utils::verification_handler::verification_handler;
+use axum::extract::State;
 use axum::{
-    extract::Multipart,
     Json,
+    extract::Multipart,
     extract::{Extension, Path, Request},
     http::StatusCode,
     response::IntoResponse,
 };
-use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::error;
-use crate::AppState;
-use crate::utils::verification_handler::verification_handler;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserPayload {
@@ -79,9 +79,9 @@ pub async fn update_password(
         WHERE id = $1
         "#,
     )
-        .bind(user_id)
-        .fetch_optional(&state.db)
-        .await
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
     {
         Ok(Some(user)) => user,
         Ok(None) => {
@@ -174,10 +174,10 @@ pub async fn update_password(
                   is_active, is_admin
         "#,
     )
-        .bind(hashed_password)
-        .bind(user_id)
-        .fetch_one(&state.db)
-        .await
+    .bind(hashed_password)
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await
     {
         Ok(user) => user,
         Err(e) => {
