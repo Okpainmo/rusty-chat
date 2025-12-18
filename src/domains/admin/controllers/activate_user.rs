@@ -1,11 +1,11 @@
+use crate::AppState;
 use crate::utils::generate_tokens::{User, generate_tokens};
-use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
 use axum::extract::{Path, State};
+use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::{Cookie, Cookies};
 use tracing::{error, info};
-use crate::AppState;
 
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
@@ -27,7 +27,7 @@ pub struct UserProfile {
     is_admin: bool,
     is_active: bool,
     status: String,
-    last_seen: Option<String>
+    last_seen: Option<String>,
 }
 
 pub async fn activate_user(
@@ -35,7 +35,6 @@ pub async fn activate_user(
     Path(user_id): Path<i64>,
     cookies: Cookies,
 ) -> impl IntoResponse {
-
     let result = sqlx::query_as::<_, UserProfile>(
         r#"
         UPDATE users
@@ -54,21 +53,19 @@ pub async fn activate_user(
             is_active
         "#,
     )
-        .bind(user_id)
-        .fetch_one(&state.db)
-        .await;
+    .bind(user_id)
+    .fetch_one(&state.db)
+    .await;
 
     match result {
-        Ok(user) => {
-            (
-                StatusCode::OK,
-                Json(LogoutResponse {
-                    response_message: "User activated successfully".to_string(),
-                    error: None,
-                    response: Some(user),
-                }),
-            )
-        }
+        Ok(user) => (
+            StatusCode::OK,
+            Json(LogoutResponse {
+                response_message: "User activated successfully".to_string(),
+                error: None,
+                response: Some(user),
+            }),
+        ),
         Err(e) => {
             error!("USER ACTIVATION WAS UNSUCCESSFUL!");
 
