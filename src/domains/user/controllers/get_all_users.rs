@@ -17,7 +17,7 @@ pub struct UserProfile {
     id: i64,
     full_name: String,
     email: String,
-    profile_image_url: Option<String>,
+    profile_image: Option<String>,
     access_token: String,
     refresh_token: String,
     status: String,
@@ -65,7 +65,7 @@ pub async fn get_all_users(
     // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
 
     let users_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image_url, password, access_token, refresh_token, status, last_seen, is_active, is_admin  FROM users"
+        "SELECT id, full_name, email, profile_image, password, access_token, refresh_token, status, last_seen, is_active, is_admin  FROM users"
     )
     .fetch_all(&state.db)
     .await;

@@ -8,6 +8,7 @@ use crate::utils::generate_tokens::{User, generate_tokens};
 use crate::utils::hashing_handler::hashing_handler;
 
 use axum::{
+    extract::Multipart,
     Json,
     extract::{Extension, Path, Request},
     http::StatusCode,
@@ -23,7 +24,6 @@ use crate::AppState;
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserPayload {
     pub full_name: Option<String>,
-    pub profile_image_url: Option<String>,
     pub email: Option<String>,
     pub password: Option<String>,
 }
@@ -33,7 +33,7 @@ pub struct UserProfile {
     id: i64,
     full_name: String,
     email: String,
-    profile_image_url: Option<String>,
+    profile_image: Option<String>,
     access_token: String,
     refresh_token: String,
     status: String,
@@ -73,10 +73,11 @@ pub async fn update_user(
         set_clauses.push(format!("full_name = ${}", param_index));
         param_index += 1;
     }
-    if payload.profile_image_url.is_some() {
-        set_clauses.push(format!("profile_image_url = ${}", param_index));
-        param_index += 1;
-    }
+
+    // if payload.profile_image_url.is_some() {
+    //     set_clauses.push(format!("profile_image_url = ${}", param_index));
+    //     param_index += 1;
+    // }
     if payload.email.is_some() {
         set_clauses.push(format!("email = ${}", param_index));
         param_index += 1;
@@ -88,10 +89,12 @@ pub async fn update_user(
         set_clauses.push(format!("refresh_token = ${}", param_index));
         param_index += 1;
     }
-    if payload.password.is_some() {
-        set_clauses.push(format!("password = ${}", param_index));
-        param_index += 1;
-    }
+
+    // Let password have its own dedicated end-point
+    // if payload.password.is_some() {
+    //     set_clauses.push(format!("password = ${}", param_index));
+    //     param_index += 1;
+    // }
 
     if set_clauses.is_empty() {
         error!("USER UPDATE FAILED: EMPTY REQUEST PAYLOAD PROVIDED!");
@@ -112,7 +115,7 @@ pub async fn update_user(
         UPDATE users
         SET {}, updated_at = NOW()
         WHERE id = $1
-        RETURNING id, full_name, email, profile_image_url, password,
+        RETURNING id, full_name, email, profile_image, password,
                   access_token, refresh_token, status, last_seen, is_active, is_admin
         "#,
         set_clauses.join(", ")
@@ -125,9 +128,9 @@ pub async fn update_user(
         query_builder = query_builder.bind(name);
     }
 
-    if let Some(img) = payload.profile_image_url {
-        query_builder = query_builder.bind(img);
-    }
+    // if let Some(img) = payload.profile_image_url {
+    //     query_builder = query_builder.bind(img);
+    // }
 
     if let Some(email) = &payload.email {
         // handle regeneration for new user email before binding it in
@@ -221,30 +224,30 @@ pub async fn update_user(
         }
     }
 
-    // now hash the password before binding for db migration
-    if let Some(password) = &payload.password {
-        let hashed_password = match
-        hashing_handler(&payload.password
-            .clone()
-            .unwrap_or("Shut up!!! - I already checked for password availability on payload. Smiles. Enjoy some humour while you debug"
-            .to_string())).await {
-            Ok(hash) => hash,
-            Err(e) => {
-                error!("PASSWORD HASHING ERROR!");
-
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(UpdateResponse {
-                        response_message: "Failed to hash password".to_string(),
-                        response: None,
-                        error: Some(format!("Password hashing error: {}", e)),
-                    }),
-                );
-            }
-        };
-
-        query_builder = query_builder.bind(hashed_password);
-    }
+    // Let password have its own dedicated end-point
+    // if let Some(password) = &payload.password {
+    //     let hashed_password = match
+    //     hashing_handler(&payload.password
+    //         .clone()
+    //         .expect("Failed to hash password!")
+    //         .to_string()).await {
+    //         Ok(hash) => hash,
+    //         Err(e) => {
+    //             error!("PASSWORD HASHING ERROR!");
+    //
+    //             return (
+    //                 StatusCode::BAD_REQUEST,
+    //                 Json(UpdateResponse {
+    //                     response_message: "Failed to hash password".to_string(),
+    //                     response: None,
+    //                     error: Some(format!("Password hashing error: {}", e)),
+    //                 }),
+    //             );
+    //         }
+    //     };
+    //
+    //     query_builder = query_builder.bind(hashed_password);
+    // }
 
     // println!("request payload: {:?}", payload);
 

@@ -5,13 +5,17 @@ use crate::AppState;
 use crate::domains::user::controllers::get_all_users::get_all_users;
 use crate::domains::user::controllers::get_user::get_user;
 use crate::domains::user::controllers::update_user::update_user;
+use crate::domains::user::controllers::update_profile_image::update_profile_image;
 use crate::middlewares::auth_access_middleware::access_middleware;
 use crate::middlewares::auth_sessions_middleware::sessions_middleware;
+use crate::domains::user::controllers::update_password::update_password;
 
 pub fn user_routes(state: &AppState) -> Router<AppState> {
     Router::new()
         .route("/user/get-user/{user_id}", get(get_user))
         .route("/user/update-user/{user_id}", patch(update_user))
+        .route("/user/update-password/{user_id}", patch(update_password))
+        .route("/user/update-profile-image/{user_id}", patch(update_profile_image))
         .route("/user/get-all-users", get(get_all_users))
         .route_layer(middleware::from_fn_with_state(state.clone(), access_middleware))
         .route_layer(middleware::from_fn_with_state(state.clone(), sessions_middleware))
