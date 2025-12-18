@@ -7,7 +7,7 @@ edition = "2024"
 argon2 = "0.5.3"
 aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "1.117.0", features = ["behavior-version-latest"] }
-axum = "0.8.7"
+axum = { version = "0.8.7", features = ["multipart"] }
 chrono = "0.4.42"
 dotenvy = "0.15.7"
 jsonwebtoken = {version = "10.2.0", features = ["rust_crypto"]}
@@ -20,3 +20,4 @@ tokio = { version = "1.48.0", features = ["full"] }
 tower-cookies = "0.11.0"
 tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "json", "time"] }
+aws-credential-types = { version = "1.2.11", features = ["hardcoded-credentials"] }
