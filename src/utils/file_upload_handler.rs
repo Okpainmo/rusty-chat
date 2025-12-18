@@ -1,27 +1,15 @@
+use aws_sdk_s3::Client;
+use axum::extract::multipart::{Field, MultipartError};
 use axum::{
+    Router,
+    extract::Multipart,
     extract::State,
-    // extract:: Multipart,
     http::StatusCode,
     response::Json,
     routing::{get, post},
-    Router,
 };
-use aws_sdk_s3::Client;
 use serde::Serialize;
-
-// App state
-#[derive(Clone)]
-struct AppState {
-    s3_client: Client,
-    bucket_name: String,
-}
-
-// Response types
-#[derive(Serialize)]
-struct UploadResponse {
-    file_key: String,
-    message: String,
-}
+use std::env;
 
 #[derive(Clone, Debug)]
 pub struct S3AppState {
@@ -34,72 +22,75 @@ struct ErrorResponse {
     error: String,
 }
 
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct UserProfile {
+    id: i64,
+    full_name: String,
+    email: String,
+    profile_image: Option<String>,
+    access_token: String,
+    refresh_token: String,
+    status: String,
+    last_seen: Option<String>,
+    #[serde(skip_serializing)]
+    password: String,
+    is_admin: bool,
+    is_active: bool,
+}
 
-// async fn upload_file(
-//     State(state): State<AppState>,
-//     mut multipart: Multipart,
-// ) -> Result<Json<UploadResponse>, (StatusCode, Json<ErrorResponse>)> {
-//
-//     // Get the first field (the file)
-//     let field = multipart
-//         .next_field()
-//         .await
-//         .map_err(|e| {
-//             (
-//                 StatusCode::BAD_REQUEST,
-//                 Json(ErrorResponse {
-//                     error: format!("Failed to read field: {}", e),
-//                 }),
-//             )
-//         })?
-//         .ok_or_else(|| {
-//             (
-//                 StatusCode::BAD_REQUEST,
-//                 Json(ErrorResponse {
-//                     error: "No file provided".to_string(),
-//                 }),
-//             )
-//         })?;
-//
-//     // Get filename
-//     let filename = field
-//         .file_name()
-//         .unwrap_or("unnamed")
-//         .to_string();
-//
-//     // Read file bytes
-//     let data = field.bytes().await.map_err(|e| {
-//         (
-//             StatusCode::INTERNAL_SERVER_ERROR,
-//             Json(ErrorResponse {
-//                 error: format!("Failed to read file: {}", e),
-//             }),
-//         )
-//     })?;
-//
-//     // Generate unique S3 key
-//     let file_key = "my_key";
-//
-//     // Upload to S3
-//     state
-//         .s3_client
-//         .put_object()
-//         .bucket(&state.bucket_name)
-//         .key(&file_key)
-//         .body(data.into())
-//         .send()
-//         .await
-//         .map_err(|e| {
-//             (
-//                 StatusCode::INTERNAL_SERVER_ERROR,
-//                 Json(ErrorResponse {
-//                     error: format!("S3 upload failed: {}", e),
-//                 }),
-//             )
-//         })?;
-//
-//     Ok(Json(UploadResponse {
-//         file_key: file_key.clone(),
-//         message: format!("File uploaded successfully: {}", file_key),
-//     }))
-// }
+pub struct UpdateResponse {
+    response_message: String,
+    response: Option<UserProfile>,
+    error: Option<String>,
+}
+
+pub async fn upload_file(
+    State(state): State<&crate::AppState>,
+    field: Field<'_>,
+    user_id: &i64,
+) -> Result<String, MultipartError> {
+    // Your implementation
+
+    // Generate unique S3 key
+    let extension = field
+        .file_name()
+        .expect("Failed to extract object file name!")
+        .split('.')
+        .last()
+        .expect("Failed to get object extension");
+
+    let file_key = format!("profile_image_{}.{}", user_id, extension);
+
+    let aws_region = env::var("AWS_S3_BUCKET_REGION").expect("AWS_S3_BUCKET_REGION must be set");
+
+    // Construct the S3 URL
+    // Format: https://{bucket}.s3.{region}.amazonaws.com/{key}
+    let file_url = format!(
+        "https://{}.s3.{}.amazonaws.com/{}",
+        state.s3.bucket_name, aws_region, file_key,
+    );
+
+    let content_type = field
+        .content_type()
+        .map(|ct| ct.to_string())
+        .expect("Failed to extract object content type!");
+
+    let data = field.bytes().await?.to_vec();
+
+    // Upload to S3
+    state
+        .s3
+        .s3_client
+        .put_object()
+        .bucket(&state.s3.bucket_name)
+        .key(&file_key)
+        .content_type(content_type)
+        .body(data.into())
+        .send()
+        .await
+        .expect("S3 File upload failed!");
+
+    // println!("{:?}", res);
+
+    Ok(file_url)
+}
