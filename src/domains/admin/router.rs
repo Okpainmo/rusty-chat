@@ -12,10 +12,10 @@ use tower_cookies::CookieManagerLayer;
 
 pub fn admin_routes(state: &AppState) -> Router<AppState> {
     Router::new()
-        .route("/admin/add-admin/{user_id}", patch(add_admin))
-        .route("/admin/remove-admin/{user_id}", patch(remove_admin))
-        .route("/admin/activate-user/{user_id}", patch(activate_user))
-        .route("/admin/deactivate-user/{user_id}", patch(deactivate_user))
+        .route("/add-admin/{user_id}", patch(add_admin))
+        .route("/remove-admin/{user_id}", patch(remove_admin))
+        .route("/activate-user/{user_id}", patch(activate_user))
+        .route("/deactivate-user/{user_id}", patch(deactivate_user))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             access_middleware,

@@ -8,8 +8,8 @@ use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
 
 pub fn auth_routes(state: &AppState) -> Router<AppState> {
     Router::new()
-        .route("/auth/register", post(register_user))
-        .route("/auth/login", post(login_user))
-        .route("/auth/logout", post(logout_user))
+        .route("/register", post(register_user))
+        .route("/login", post(login_user))
+        .route("/logout", post(logout_user))
         .layer(CookieManagerLayer::new())
 }
