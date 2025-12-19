@@ -85,6 +85,8 @@ pub async fn update_password(
     {
         Ok(Some(user)) => user,
         Ok(None) => {
+            error!("FAILED TO FETCH USER FOR PASSWORD UPDATE!");
+
             return (
                 StatusCode::NOT_FOUND,
                 Json(UpdateResponse {
@@ -124,7 +126,7 @@ pub async fn update_password(
     let password_matches = match verification_handler(&payload.old_password, &user.password).await {
         Ok(valid) => valid,
         Err(e) => {
-            error!("PASSWORD VERIFICATION ERROR!");
+            error!("PASSWORD VERIFICATION ERROR ON PASSWORD RESET!");
 
             return (
                 StatusCode::BAD_REQUEST,
@@ -138,6 +140,8 @@ pub async fn update_password(
     };
 
     if !password_matches {
+        error!("PASSWORD RESET ATTEMPT WITH INVALID OLD PASSWORD!");
+
         return (
             StatusCode::UNAUTHORIZED,
             Json(UpdateResponse {
@@ -151,7 +155,7 @@ pub async fn update_password(
     let hashed_password = match hashing_handler(&payload.new_password).await {
         Ok(hash) => hash,
         Err(e) => {
-            error!("PASSWORD HASHING ERROR!");
+            error!("NEW-PASSWORD HASHING ERROR ON PASSWORD RESET!");
 
             return (
                 StatusCode::BAD_REQUEST,

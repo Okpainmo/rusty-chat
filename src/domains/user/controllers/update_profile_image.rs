@@ -132,7 +132,7 @@ pub async fn update_profile_image(
             );
         }
         Err(e) => {
-            error!("FAILED TO EXTRACT FILE: {}", e);
+            error!("FAILED TO EXTRACT FILE FOR UPLOAD: {}", e);
 
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,

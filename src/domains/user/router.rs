@@ -12,14 +12,14 @@ use tower_cookies::CookieManagerLayer;
 
 pub fn user_routes(state: &AppState) -> Router<AppState> {
     Router::new()
-        .route("/user/get-user/{user_id}", get(get_user))
-        .route("/user/update-user/{user_id}", patch(update_user))
-        .route("/user/update-password/{user_id}", patch(update_password))
+        .route("/get-user/{user_id}", get(get_user))
+        .route("/update-user/{user_id}", patch(update_user))
+        .route("/update-password/{user_id}", patch(update_password))
         .route(
-            "/user/update-profile-image/{user_id}",
+            "/update-profile-image/{user_id}",
             patch(update_profile_image),
         )
-        .route("/user/get-all-users", get(get_all_users))
+        .route("/get-all-users", get(get_all_users))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             access_middleware,
