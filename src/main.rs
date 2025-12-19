@@ -29,6 +29,7 @@ mod domains;
 use crate::domains::admin::router::admin_routes;
 use crate::domains::auth::router::auth_routes;
 use crate::domains::user::router::user_routes;
+use crate::domains::rooms::router::rooms_routes;
 
 mod middlewares;
 use crate::middlewares::logging_middleware::logging_middleware;
@@ -98,9 +99,10 @@ async fn main() {
     };
 
     let app = Router::new()
-        .nest("/api/v1", auth_routes(&state))
-        .nest("/api/v1", user_routes(&state))
-        .nest("/api/v1", admin_routes(&state))
+        .nest("/api/v1/auth", auth_routes(&state))
+        .nest("/api/v1/user", user_routes(&state))
+        .nest("/api/v1/admin", admin_routes(&state))
+        .nest("/api/v1/rooms", rooms_routes(&state))
         .layer(middleware::from_fn(logging_middleware))
         .layer(middleware::from_fn(timeout_middleware))
         .with_state(state);
