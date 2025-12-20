@@ -1,5 +1,13 @@
 # Notes
 
+## Important feature to add.
+
+- Feature name: "Spaces" - a version of self messaging in Whatsapp. But more like notes spaces that you 
+create to jot down valuable stuff. Advantage is you can create and customize multiple spaces for yourself -
+for taking notes on different topics. Also consider a way to share external read-only access to one's spaces. 
+The read-only access is actually not necessary since the goal is to provide kind of a self messaging version of
+what is on Whatsapp.
+
 ## Making a clean project refresh.
 
 ```shell
