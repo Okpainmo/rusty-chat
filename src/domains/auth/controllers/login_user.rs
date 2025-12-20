@@ -13,8 +13,8 @@ use tracing::error;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct UserProfile {
-    #[sqlx(rename = "id")]
-    user_id: i64,
+    // #[sqlx(rename = "id")]
+    id: i64,
     full_name: String,
     email: String,
     profile_image: Option<String>,
@@ -93,7 +93,7 @@ pub async fn login_user(
             let tokens = match generate_tokens(
                 "auth",
                 User {
-                    id: user.user_id,
+                    id: user.id,
                     email: payload.email.clone(),
                 },
             )
