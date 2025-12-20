@@ -1,3 +1,4 @@
+use std::cmp::PartialEq;
 use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use axum::extract::Query;
@@ -15,7 +16,8 @@ use tracing::error;
 #[derive(Debug, Deserialize)]
 pub struct CreateRoomPayload {
     // pub room_name: String,
-    pub co_member: i64,
+    pub co_members: Vec<i64>,
+    pub room_name: String
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -42,7 +44,7 @@ pub struct Room {
     pub created_by: Option<i64>,
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
-    pub co_member: i64, // for private rooms only
+    pub co_members: Vec<i64>, // for group rooms only
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -73,7 +75,7 @@ fn current_time_millis() -> u128 {
         .as_millis()
 }
 
-pub async fn create_room(
+pub async fn create_group(
     State(state): State<AppState>,
     // Query(params): Query<SearchParams>,
     Extension(session): Extension<SessionsMiddlewareOutput>,
@@ -83,34 +85,38 @@ pub async fn create_room(
 
     let created_by = session.user.id;
 
-    if payload.co_member == created_by {
-        error!("ROOM CREATION ERROR: SELF ROOM CREATION ATTEMPT!");
-
-        return (
-            StatusCode::NOT_FOUND,
-            Json(Response {
-                response_message: "Self room creation not permitted!".to_string(),
-                error: Some("Room creation error".to_string()),
-                response: None,
-            }),
+    // for (index, &member) in payload.co_members.iter().enumerate() {
+    for member in &payload.co_members {
+        match sqlx::query_as::<_, UserLookUp>(
+            "SELECT id, full_name FROM users WHERE id = $1",
         )
-    }
-
-    let co_member =  match sqlx::query_as::<_, UserLookUp>(
-        "SELECT id, full_name FROM users WHERE id = $1",
-    )
-        .bind(&payload.co_member)
-        .fetch_optional(&state.db)
-        .await
+            .bind(member)
+            .fetch_optional(&state.db)
+            .await
         {
-            Ok(Some(member)) => member,
+            Ok(Some(member)) => {
+                if created_by == member.id {
+                    error!("ROOM CREATION ERROR: SELF IN CO-MEMBERS ARRAY!");
+
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(Response {
+                            response_message: "Self in co-members array!".to_string(),
+                            error: Some("Room creation error".to_string()),
+                            response: None,
+                        }),
+                    )
+                }
+
+                member
+            },
             Ok(None) => {
-                error!("ROOM CREATION ERROR: CO-MEMBER DATA NOT PROVIDED!");
+                error!("ROOM CREATION ERROR: AT LEAST ONE CO-MEMBER DATA NOT PROVIDED!");
 
                 return (
                     StatusCode::NOT_FOUND,
                     Json(Response {
-                        response_message: format!("Co-member with id: '{}' not found", payload.co_member),
+                        response_message: format!("Co-member with id: '{}' not found", member),
                         error: Some("Room creation error".to_string()),
                         response: None,
                     }),
@@ -122,72 +128,26 @@ pub async fn create_room(
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(Response {
-                        response_message: format!("Co-member with id: '{}' not found", payload.co_member),
+                        response_message: format!("Co-member with id: '{}' not found", member),
                         error: Some(format!("Room creation error: {:?}", e)),
                         response: None,
                     })
                 )
             }
         };
-
-    // check to prevent creating a duplicate room for the same private chat
-    match sqlx::query_as::<_, Room>(
-        "SELECT id, room_name, is_group, created_by, bookmarked_by, archived_by, co_member
-                FROM rooms
-                WHERE created_by = $1
-                    AND room_name = $2
-                    AND is_group =  $3
-            ",
-    )
-        .bind(&created_by)
-        .bind(&co_member.full_name)
-        .bind(false)
-        .fetch_all(&state.db)
-        .await
-         {
-             Ok(rooms) => {
-                 /* a room can have the same room name since multiple users can have the same names
-                  but their ids is certainly what must differ */
-                 for room in rooms {
-                     if(room.co_member == co_member.id) {
-                         error!("DUPLICATE PRIVATE CHAT ROOM CREATION ATTEMPT!");
-
-                         return (
-                             StatusCode::BAD_REQUEST,
-                             Json(Response {
-                                 response_message: "Room already exists".into(),
-                                 response: None,
-                                 error: Some("Cannot create duplicate 1-on-1 room".into()),
-                             }),
-                         );
-                     }
-                 }
-             },
-             Err(e) => {
-                 error!("ROOM CREATION ERROR!");
-
-                 return (
-                     StatusCode::BAD_REQUEST,
-                     Json(Response {
-                         response_message: "Room creation error".into(),
-                         response: None,
-                         error: Some(format!("Room creation error: {}", e)),
-                     }),
-                 );
-             }
-        };
+    };
 
     let room = match sqlx::query_as::<_, Room>(
         r#"
-        INSERT INTO rooms (room_name, is_group, created_by, co_member)
-        VALUES ($1, $2, $3, $4 )
-        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, co_member
+        INSERT INTO rooms (room_name, is_group, created_by, co_members)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, co_members
         "#,
     )
-    .bind(&co_member.full_name)
-    .bind(false)
+    .bind(&payload.room_name)
+    .bind(true)
     .bind(created_by)
-    .bind(&co_member.id)
+    .bind(&payload.co_members)
     .fetch_one(&state.db)
     .await
     {
@@ -228,7 +188,7 @@ pub async fn create_room(
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(Response {
-                    response_message: "Failed to create admin room member".into(),
+                    response_message: "Failed to create room member 2".into(),
                     response: None,
                     error: Some(format!("Room member creation error : {}", e)),
                 }),
@@ -236,35 +196,37 @@ pub async fn create_room(
         }
     };
 
-    // create room co-member
-    match sqlx::query_as::<_, RoomMember>(
-        r#"
+    for member in payload.co_members {
+        // create room co-members
+        match sqlx::query_as::<_, RoomMember>(
+            r#"
         INSERT INTO room_members (room_id, user_id, role, joined_at)
         VALUES ($1, $2, $3, $4)
         RETURNING id, room_id, user_id, role, joined_at
         "#,
-    )
-    .bind(room.id)
-    .bind(co_member.id)
-    .bind("member")
-    .bind(current_time_millis().to_string())
-    .fetch_one(&state.db)
-    .await
-    {
-        Ok(room) => room,
-        Err(e) => {
-            error!("ROOM MEMBER CREATION ERROR!");
+        )
+            .bind(room.id)
+            .bind(member)
+            .bind("member")
+            .bind(current_time_millis().to_string())
+            .fetch_one(&state.db)
+            .await
+        {
+            Ok(room) => room,
+            Err(e) => {
+                error!("ROOM MEMBER CREATION ERROR!");
 
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(Response {
-                    response_message: "Failed to create room co_member".into(),
-                    response: None,
-                    error: Some(format!("Room member creation error : {}", e)),
-                }),
-            );
-        }
-    };
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(Response {
+                        response_message: "Failed to create room member".into(),
+                        response: None,
+                        error: Some(format!("Room member creation error : {}", e)),
+                    }),
+                );
+            }
+        };
+    }
 
     (
         StatusCode::OK,
