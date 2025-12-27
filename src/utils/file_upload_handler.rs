@@ -44,10 +44,17 @@ pub struct UpdateResponse {
     error: Option<String>,
 }
 
+pub enum UploadType {
+    UserProfileImage,
+    RoomProfileImage,
+}
+
+
 pub async fn upload_file(
     State(state): State<&crate::AppState>,
     field: Field<'_>,
-    user_id: &i64,
+    upload_id: &i64,
+    upload_type: UploadType
 ) -> Result<String, MultipartError> {
     // Your implementation
 
@@ -59,7 +66,14 @@ pub async fn upload_file(
         .last()
         .expect("Failed to get object extension");
 
-    let file_key = format!("profile_image_{}.{}", user_id, extension);
+    let file_key = match upload_type {
+        UploadType::RoomProfileImage => {
+            format!("room_image_{}.{}", upload_id, extension)
+        },
+        UploadType::UserProfileImage => {
+            format!("profile_image_{}.{}", upload_id, extension)
+        }
+    };
 
     let aws_region = env::var("AWS_S3_BUCKET_REGION").expect("AWS_S3_BUCKET_REGION must be set");
 
@@ -67,7 +81,7 @@ pub async fn upload_file(
     // Format: https://{bucket}.s3.{region}.amazonaws.com/{key}
     let file_url = format!(
         "https://{}.s3.{}.amazonaws.com/{}",
-        state.s3.bucket_name, aws_region, file_key,
+        state.s3.bucket_name, aws_region, file_key
     );
 
     let content_type = field
