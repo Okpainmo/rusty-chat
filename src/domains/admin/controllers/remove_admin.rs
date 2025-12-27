@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::{Cookie, Cookies};
 use tracing::{error, info};
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
@@ -29,6 +30,8 @@ pub struct UserProfile {
     is_active: bool,
     status: String,
     last_seen: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 pub async fn remove_admin(
@@ -51,7 +54,9 @@ pub async fn remove_admin(
             status,
             last_seen,
             is_admin,
-            is_active
+            is_active,
+            created_at,
+            updated_at
         "#,
     )
     .bind(user_id)
