@@ -90,15 +90,16 @@ pub async fn admin_routes_protector(
             id,
             full_name,
             email,
-            refresh_token,
-            profile_image_url,
+            profile_image,
             is_admin,
             is_active,
             access_token,
             refresh_token,
             status,
             last_seen,
-            password
+            password,
+            created_at,
+            updated_at
         FROM users
         WHERE email = $1
         "#,

@@ -12,6 +12,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tower_cookies::Cookies;
 use tracing::error;
+use chrono::NaiveDateTime;
 
 use crate::utils::generate_tokens::User;
 
@@ -43,10 +44,11 @@ pub struct UserProfile {
     pub refresh_token: Option<String>,
     pub status: String,
     pub last_seen: Option<String>,
-    #[serde(skip_serializing)]
     pub password: String,
     pub is_admin: bool,
     pub is_active: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Clone)]
@@ -144,7 +146,9 @@ pub async fn sessions_middleware(
             refresh_token,
             status,
             last_seen,
-            password
+            password,
+            created_at,
+            updated_at
         FROM users
         WHERE email = $1
         "#,
@@ -246,6 +250,8 @@ pub async fn sessions_middleware(
                     password: user.password,
                     is_admin: user.is_admin,
                     is_active: user.is_active,
+                    created_at: user.created_at,
+                    updated_at: user.updated_at,
                 },
                 session_status: "USER SESSION IS ACTIVE".to_string(),
             });
