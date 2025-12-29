@@ -20,12 +20,17 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::error;
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserPayload {
     pub full_name: Option<String>,
     pub email: Option<String>,
-    pub password: Option<String>,
+    // pub password: Option<String>,
+    pub country: Option<String>,
+    pub phone_number: Option<String>,
+    pub status: Option<String>,
+    pub last_seen: Option<String>
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -42,12 +47,19 @@ pub struct UserProfile {
     password: String,
     is_admin: bool,
     is_active: bool,
+    country: String,
+    phone_number: String,
+    is_logged_out: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, sqlx::FromRow)]
 struct UserLookup {
     id: i64,
     email: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,12 +77,47 @@ pub async fn update_user(
     Path(user_id): Path<i64>,
     Json(payload): Json<UpdateUserPayload>,
 ) -> impl IntoResponse {
+    // only an admin or owner of the profile can update
+    if session.user.id != user_id && !session.user.is_admin {
+        error!("UNAUTHORIZED USER UPDATE ATTEMPT!");
+
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(UpdateResponse {
+                response_message: "You're not permitted to perform this action for this user"
+                    .into(),
+                response: None,
+                error: Some("Unauthorized user update attempt".into()),
+            }),
+        );
+    }
+
     // Build dynamic SQL with proper parameter indexing
     let mut set_clauses = Vec::new();
     let mut param_index = 2; // Start at 2 because $1 is user_id
 
     if payload.full_name.is_some() {
         set_clauses.push(format!("full_name = ${}", param_index));
+        param_index += 1;
+    }
+
+    if payload.country.is_some() {
+        set_clauses.push(format!("country = ${}", param_index));
+        param_index += 1;
+    }
+
+    if payload.phone_number.is_some() {
+        set_clauses.push(format!("phone_number = ${}", param_index));
+        param_index += 1;
+    }
+
+    if payload.status.is_some() {
+        set_clauses.push(format!("status = ${}", param_index));
+        param_index += 1;
+    }
+
+    if payload.last_seen.is_some() {
+        set_clauses.push(format!("last_seen = ${}", param_index));
         param_index += 1;
     }
 
@@ -116,8 +163,8 @@ pub async fn update_user(
         SET {}, updated_at = NOW()
         WHERE id = $1
         RETURNING id, full_name, email, profile_image, password,
-                  access_token, refresh_token, status, last_seen, is_active, is_admin
-        "#,
+        access_token, refresh_token, status, last_seen, is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at
+"#,
         set_clauses.join(", ")
     );
 
@@ -128,16 +175,31 @@ pub async fn update_user(
         query_builder = query_builder.bind(name);
     }
 
+    if let Some(country) = payload.country {
+        query_builder = query_builder.bind(country);
+    }
+
+    if let Some(phone_number) = payload.phone_number {
+        query_builder = query_builder.bind(phone_number);
+    }
+
+    if let Some(status) = payload.status {
+        query_builder = query_builder.bind(status);
+    }
+
+    if let Some(last_seen) = payload.last_seen {
+        query_builder = query_builder.bind(last_seen);
+    }
+
     // if let Some(img) = payload.profile_image_url {
     //     query_builder = query_builder.bind(img);
     // }
 
     if let Some(email) = &payload.email {
         // handle regeneration for new user email before binding it in
-        // 1. get user by email to access the user id
-
+        // 1. verify that the user exist
         let user_result =
-            sqlx::query_as::<_, UserLookup>("SELECT id, email FROM users WHERE id = $1")
+            sqlx::query_as::<_, UserLookup>("SELECT id, email, created_at, updated_at FROM users WHERE id = $1")
                 // user_id from request param
                 .bind(user_id)
                 .fetch_optional(&state.db)
@@ -170,21 +232,6 @@ pub async fn update_user(
                 );
             }
         };
-
-        // only an admin or owner of the profile can update
-        if session.user.email != user.email && !session.user.is_admin {
-            error!("UNAUTHORIZED USER UPDATE ATTEMPT!");
-
-            return (
-                StatusCode::UNAUTHORIZED,
-                Json(UpdateResponse {
-                    response_message: "You're not permitted to perform this action for this user"
-                        .into(),
-                    response: None,
-                    error: Some("Unauthorized user update attempt".into()),
-                }),
-            );
-        }
 
         // 2. generate tokens
         let tokens = match generate_tokens(

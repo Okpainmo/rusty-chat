@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::error;
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserPayload {
@@ -43,12 +44,19 @@ pub struct UserProfile {
     password: String,
     is_admin: bool,
     is_active: bool,
+    country: String,
+    phone_number: String,
+    is_logged_out: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, sqlx::FromRow)]
 struct UserLookup {
     id: i64,
     email: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
@@ -74,7 +82,7 @@ pub async fn update_password(
         r#"
         SELECT id, full_name, email, profile_image, password,
                access_token, refresh_token, status, last_seen,
-               is_active, is_admin
+               is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at
         FROM users
         WHERE id = $1
         "#,
@@ -175,7 +183,7 @@ pub async fn update_password(
         WHERE id = $2
         RETURNING id, full_name, email, profile_image, password,
                   access_token, refresh_token, status, last_seen,
-                  is_active, is_admin
+                  is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at
         "#,
     )
     .bind(hashed_password)

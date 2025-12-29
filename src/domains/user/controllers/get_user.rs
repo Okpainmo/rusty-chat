@@ -11,6 +11,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{error, info};
+use chrono::NaiveDateTime;
 // use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -27,6 +28,11 @@ pub struct UserProfile {
     password: String,
     is_admin: bool,
     is_active: bool,
+    country: String,
+    phone_number: String,
+    is_logged_out: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 #[derive(Debug, Serialize)]
 pub struct UserResponse {
@@ -67,7 +73,7 @@ pub async fn get_user(
     // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
 
     let user_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image, password, access_token, refresh_token, status, last_seen, is_active, is_admin FROM users WHERE id = $1"
+        "SELECT id, full_name, email, profile_image, password, access_token, refresh_token, status, last_seen, is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at FROM users WHERE id = $1"
     )
         .bind(user_id)
         .fetch_optional(&state.db)
@@ -90,7 +96,7 @@ pub async fn get_user(
                 Json(UserResponse {
                     response_message: "User not found".to_string(),
                     response: None,
-                    error: Some(format!("No user with id {}", user_id)),
+                    error: Some(format!("No user with id: {}", user_id)),
                 }),
             )
         }

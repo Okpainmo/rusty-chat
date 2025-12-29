@@ -10,6 +10,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::error;
+use chrono::NaiveDateTime;
 // use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -26,6 +27,11 @@ pub struct UserProfile {
     password: String,
     is_admin: bool,
     is_active: bool,
+    country: String,
+    phone_number: String,
+    is_logged_out: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,7 +71,7 @@ pub async fn get_all_users(
     // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
 
     let users_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image, password, access_token, refresh_token, status, last_seen, is_active, is_admin  FROM users"
+        "SELECT id, full_name, email, profile_image, password, access_token, refresh_token, status, last_seen, is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at FROM users"
     )
     .fetch_all(&state.db)
     .await;
