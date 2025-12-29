@@ -13,7 +13,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::error;
-
+use chrono::NaiveDateTime;
+use crate::utils::file_upload_handler::UploadType;
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct Room {
     pub id: i64,
@@ -25,6 +26,9 @@ pub struct Room {
     pub room_profile_image: Option<String>,
     pub co_member: Option<i64>, // for private rooms only
     pub co_members: Option<Vec<i64>>, // for private rooms only
+    pub is_public: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -32,6 +36,8 @@ struct RoomLookup {
     id: i64,
     created_by: Option<i64>,
     is_group: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -40,6 +46,8 @@ struct RoomMemberLookup {
     room_id: i64,
     user_id: i64,
     role: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
@@ -57,7 +65,7 @@ pub async fn update_room_profile_image(
 ) -> impl IntoResponse {
     // Verify room exists and get room details
     let room_result = sqlx::query_as::<_, RoomLookup>(
-        "SELECT id, created_by, is_group FROM rooms WHERE id = $1"
+        "SELECT id, created_by, is_group, created_at, updated_at FROM rooms WHERE id = $1"
     )
         .bind(room_id)
         .fetch_optional(&state.db)
@@ -93,7 +101,7 @@ pub async fn update_room_profile_image(
 
     // Check if user is a member of the room
     let member_result = sqlx::query_as::<_, RoomMemberLookup>(
-        "SELECT id, room_id, user_id, role FROM room_members WHERE room_id = $1 AND user_id = $2"
+        "SELECT id, room_id, user_id, role, created_at, updated_at FROM room_members WHERE room_id = $1 AND user_id = $2"
     )
         .bind(room_id)
         .bind(session.user.id)
@@ -170,7 +178,7 @@ pub async fn update_room_profile_image(
         }
     };
 
-    let file_url = match upload_file(State(&state), file, &room_id).await {
+    let file_url = match upload_file(State(&state), file, &room_id, UploadType::RoomProfileImage).await {
         Ok(file_url) => file_url,
         Err(e) => {
             error!("ROOM PROFILE IMAGE UPLOAD FAILED!");
@@ -193,7 +201,7 @@ pub async fn update_room_profile_image(
                 room_profile_image = $1,
                 updated_at = NOW()
             WHERE id = $2
-            RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, room_profile_image, co_member, co_members
+            RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, room_profile_image, co_member, co_members, is_public, created_at, updated_at
             "#,
     )
         .bind(file_url)

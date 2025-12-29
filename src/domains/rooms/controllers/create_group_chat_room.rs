@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateRoomPayload {
@@ -24,16 +25,8 @@ pub struct CreateRoomPayload {
 pub struct UserLookUp {
     id: i64,
     full_name: String,
-    // email: String,
-    // profile_image: Option<String>,
-    // access_token: String,
-    // refresh_token: String,
-    // status: String,
-    // last_seen: Option<String>,
-    // #[serde(skip_serializing)]
-    // password: String,
-    // is_admin: bool,
-    // is_active: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -45,6 +38,9 @@ pub struct Room {
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
     pub co_members: Vec<i64>, // for group rooms only
+    pub is_public: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -54,6 +50,8 @@ pub struct RoomMember {
     pub user_id: i64,
     pub role: String,
     pub joined_at: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,7 +86,7 @@ pub async fn create_group(
     // for (index, &member) in payload.co_members.iter().enumerate() {
     for member in &payload.co_members {
         match sqlx::query_as::<_, UserLookUp>(
-            "SELECT id, full_name FROM users WHERE id = $1",
+            "SELECT id, full_name, created_at, updated_at FROM users WHERE id = $1",
         )
             .bind(member)
             .fetch_optional(&state.db)
@@ -141,7 +139,7 @@ pub async fn create_group(
         r#"
         INSERT INTO rooms (room_name, is_group, created_by, co_members)
         VALUES ($1, $2, $3, $4)
-        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, co_members
+        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, co_members, is_public, created_at, updated_at
         "#,
     )
     .bind(&payload.room_name)
@@ -171,7 +169,7 @@ pub async fn create_group(
         r#"
         INSERT INTO room_members (room_id, user_id, role, joined_at)
         VALUES ($1, $2, $3, $4)
-        RETURNING  id, room_id, user_id, role, joined_at
+        RETURNING  id, room_id, user_id, role, joined_at, created_at, updated_at
         "#,
     )
     .bind(&room.id)
@@ -202,7 +200,7 @@ pub async fn create_group(
             r#"
         INSERT INTO room_members (room_id, user_id, role, joined_at)
         VALUES ($1, $2, $3, $4)
-        RETURNING id, room_id, user_id, role, joined_at
+        RETURNING id, room_id, user_id, role, joined_at, created_at, updated_at
         "#,
         )
             .bind(room.id)
