@@ -13,6 +13,7 @@ use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 
 use tracing::info;
+use tracing::error;
 // logging init with the tracing crate
 use tracing_subscriber::fmt::time::SystemTime;
 
@@ -57,7 +58,7 @@ async fn main() {
 
     let access_key_id = env::var("AWS_ACCESS_KEY").unwrap();
     let secret_access_key = env::var("AWS_SECRET_ACCESS_KEY").unwrap();
-    let aws_url = env::var("AWS_BUCKET_URL").unwrap();
+    // let aws_url = env::var("AWS_BUCKET_URL").unwrap();
     let aws_region = env::var("AWS_S3_BUCKET_REGION").expect("AWS_S3_BUCKET_REGION must be set");
 
     // note here that the "None" is in place of a session token
@@ -114,20 +115,41 @@ async fn main() {
 
     let slice_db_url = format!("{}...", &database_url[0..40]);
 
-    print!(
-        "
-        .................................................
-        Connected to DB: {}
-        Environment: {}
-        Status: DB connected successfully
-        .................................................
 
-        Server running on http://{}
-        ",
-        slice_db_url, environment, addr
-    );
 
     // Start server
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => {
+            print!(
+                "
+                .................................................
+                Connected to DB: {}
+                Environment: {}
+                Status: DB connected successfully
+                .................................................
+
+                Server running on http://{}
+                ",
+                slice_db_url, environment, addr
+            );
+            
+            listener
+        }
+        Err(e) => {
+            error!("SERVER INITIALIZATION ERROR: {}!", e);
+
+            return;
+        }
+    };
+
+    let server_result = axum::serve(listener, app).await;
+
+    match server_result {
+        Ok(_) => {
+            info!("Graceful server shutdown!");
+        }
+        Err(e) => {
+            error!("SERVER SHUTDOWN ERROR: {}!", e);
+        }
+    }
 }
