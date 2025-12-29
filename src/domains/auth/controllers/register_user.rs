@@ -8,6 +8,7 @@ use crate::AppState;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::hashing_handler::hashing_handler;
 use tower_cookies::Cookies;
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
@@ -15,6 +16,8 @@ pub struct RegisterRequest {
     last_name: String,
     email: String,
     password: String,
+    country: String,
+    phone_number: String
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -23,6 +26,18 @@ pub struct UserProfile {
     full_name: String,
     email: String,
     profile_image: String,
+    country: String,
+    phone_number: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct UserLookUp{
+    email: String,
+    phone_number: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,27 +77,106 @@ pub async fn register_user(
         }
     };
 
-    // Check if email already exists
-    let email_exists: Option<i64> =
-        sqlx::query_scalar("SELECT 1 FROM users WHERE email = $1 LIMIT 1;")
-            .bind(&payload.email)
-            .fetch_optional(&state.db)
-            .await
-            .unwrap_or(None)
-            .flatten();
+    // ===== Check for existing user by email =====
+    let email_query = sqlx::query_as::<_, UserLookUp>(
+        r#"
+        SELECT
+            email,
+            phone_number,
+            created_at,
+            updated_at
+        FROM users
+        WHERE email = $1
+        LIMIT 1
+        "#,
+        )
+        .bind(&payload.email)
+        .fetch_optional(&state.db)
+        .await;
 
-    if email_exists.unwrap_or(0) > 0 {
-        error!("REGISTRATION FAILED: USER WITH EMAIL ALREADY EXIST!");
+    match email_query {
+        Ok(Some(existing_user)) => {
+            // Email already exists (query condition)
+            error!("REGISTRATION FAILED: EMAIL ALREADY EXISTS");
 
-        return (
-            StatusCode::FORBIDDEN,
-            Json(RegisterResponse {
-                response_message: "Registration failed".to_string(),
-                response: None,
-                error: Some("Email already exists".to_string()),
-            }),
-        );
+            return (
+                StatusCode::FORBIDDEN,
+                Json(RegisterResponse {
+                    response_message: "Registration failed".to_string(),
+                    response: None,
+                    error: Some("Email already exists".to_string()),
+                }),
+            );
+        }
+
+        Ok(None) => {
+            // No user with this email exists — continue registration
+        }
+
+        Err(e) => {
+            error!("DATABASE ERROR WHILE CHECKING USER UNIQUENESS: {}", e);
+
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(RegisterResponse {
+                    response_message: "Registration failed".to_string(),
+                    response: None,
+                    error: Some(format!("Database error: {}", e)),
+                }),
+            );
+        }
     }
+
+    let phone_number_query = sqlx::query_as::<_, UserLookUp>(
+        r#"
+        SELECT
+            email,
+            phone_number,
+            created_at,
+            updated_at
+        FROM users
+        WHERE phone_number = $1
+        LIMIT 1
+        "#,
+    )
+        .bind(&payload.phone_number)
+        .fetch_optional(&state.db)
+        .await;
+
+    match phone_number_query {
+        Ok(Some(existing_user)) => {
+            // Email already exists (query condition)
+            error!("REGISTRATION FAILED: PHONE NUMBER ALREADY EXISTS");
+
+            return (
+                StatusCode::FORBIDDEN,
+                Json(RegisterResponse {
+                    response_message: "Registration failed".to_string(),
+                    response: None,
+                    error: Some("Phone number already exists".to_string()),
+                }),
+            );
+        }
+
+        Ok(None) => {
+            // No user with this phone_number exists — continue registration
+        }
+
+        Err(e) => {
+            error!("ERROR WHILE CHECKING USER UNIQUENESS: {}", e);
+
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(RegisterResponse {
+                    response_message: "Registration failed".to_string(),
+                    response: None,
+                    error: Some(format!("Server error: {}", e)),
+                }),
+            );
+        }
+    }
+
+
 
     let full_name = format!("{} {}", payload.first_name, payload.last_name);
 
@@ -93,20 +187,28 @@ pub async fn register_user(
             email,
             password,
             full_name,
-            profile_image
+            profile_image,
+            country,
+            phone_number
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING
             id,
             full_name,
             email,
-            profile_image
+            profile_image,
+            country,
+            phone_number,
+            created_at,
+            updated_at
         "#,
     )
         .bind(&payload.email)
         .bind(&hashed_password)
         .bind(&full_name)
         .bind("")
+        .bind(payload.country)
+        .bind(payload.phone_number)
         .fetch_one(&state.db)
         .await;
 
@@ -142,7 +244,8 @@ pub async fn register_user(
                 UPDATE users
                 SET
                     access_token = $1,
-                    refresh_token = $2
+                    refresh_token = $2,
+                    updated_at = NOW()
                 WHERE id = $3
                 "#,
             )

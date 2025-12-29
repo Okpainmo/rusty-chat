@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::{Cookie, Cookies};
 use tracing::{error, info};
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
@@ -29,7 +30,11 @@ pub struct UserProfile {
     is_active: bool,
     status: String,
     last_seen: Option<String>,
+    country: String,
+    phone_number: String,
     is_logged_out: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 pub async fn logout_user(
@@ -65,7 +70,11 @@ pub async fn logout_user(
                 last_seen,
                 is_admin,
                 is_active,
-                is_logged_out
+                is_logged_out,
+                country,
+                phone_number,
+                created_at,
+                updated_at
             "#,
     )
     .bind("") // profile_image_url
@@ -81,7 +90,7 @@ pub async fn logout_user(
             Json(LogoutResponse {
                 response_message: "Logout successful".to_string(),
                 error: None,
-                response: Some(user),
+                response: None,
             }),
         ),
         Err(e) => {
