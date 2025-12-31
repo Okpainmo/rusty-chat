@@ -23,6 +23,8 @@ cargo build
 - VISUAL STUDIO: https://visualstudio.microsoft.com/downloads/
 
 > After installation, ensure to add both to system PATH. Then restart system, and ensure that the project on the system is not too long, as that might trigger the windows "path too long" error.
+
+> **To finally disable the Windows path-too-long error, simply enable the allow-long-path features in Windows**
  
 ## Rust Multipart form handling.
 
@@ -72,4 +74,12 @@ pub async fn update_user(
     
     // Continue with your update logic...
 }
+```
+
+## Docker PG DB start command.
+
+```shell
+# update the start command to suit your setup, and start databases for all the 3 environments using docker.
+
+docker run -d --name rusty-chat__dev_db -p 5433:5432 -e POSTGRES_USER=okpainmo -e POSTGRES_PASSWORD=supersecret -e POSTGRES_DB=rusty_chat_db_dev postgres
 ```

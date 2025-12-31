@@ -31,7 +31,7 @@ cargo add axum tokio --features tokio/full serde --features serde/derive serde_j
 E.g.
 
 ```shell
-docker run -d --name ramhs__dev-db -p 5433:5432 -e POSTGRES_USER=okpainmo -e POSTGRES_PASSWORD=supersecret -e POSTGRES_DB=rust-axum-monolith-http-server__db_dev postgres
+docker run -d --name rusty-chat__dev_db -p 5433:5432 -e POSTGRES_USER=okpainmo -e POSTGRES_PASSWORD=supersecret -e POSTGRES_DB=rusty_chat_db_dev postgres
 ```
 
 3. Run the server
@@ -84,7 +84,7 @@ sqlx migrate run --database-url <database-url>
 E.g.
 
 ```shell
-sqlx migrate run --database-url postgres://okpainmo:supersecret@localhost:5433/rust-axum-monolith-http-server__db_dev
+sqlx migrate run --database-url postgres://okpainmo:supersecret@localhost:5433/rusty_chat_db_dev
 ```
 
 Cheers!!!
