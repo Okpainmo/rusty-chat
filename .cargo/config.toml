@@ -1,2 +1,4 @@
 [alias]
-dev="watch -q -c -w src/ -x run"
+# dev="watch -q -c -w src/ -x run" # watching for only file within "./src'
+# dev="watch --poll -q -c -x run" # for wsl support: when working with a project that is within the windows file system (as in "...mtn/c/...")
+dev="watch -q -c -x run"
