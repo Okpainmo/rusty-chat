@@ -131,11 +131,11 @@ pub async fn create_room(
     // check to prevent creating a duplicate room for the same private chat
     match sqlx::query_as::<_, Room>(
         "SELECT id, room_name, is_group, created_by, bookmarked_by, archived_by, co_member, is_public, created_at, updated_at
-                FROM rooms
-                WHERE created_by = $1
-                    AND room_name = $2
-                    AND is_group =  $3
-            ",
+            FROM rooms
+            WHERE created_by = $1
+                AND room_name = $2
+                AND is_group =  $3
+        ",
     )
         .bind(&created_by)
         .bind(&co_member.full_name)
@@ -144,10 +144,10 @@ pub async fn create_room(
         .await
          {
              Ok(rooms) => {
-                 /* a room can have the same room name since multiple users can have the same names
+                 /* EDGE CASE: a room can have the same room name since multiple users can have the same names
                   but their ids is certainly what must differ */
                  for room in rooms {
-                     if(room.co_member == co_member.id) {
+                     if room.co_member == co_member.id {
                          error!("DUPLICATE PRIVATE CHAT ROOM CREATION ATTEMPT!");
 
                          return (
