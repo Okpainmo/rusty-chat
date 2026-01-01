@@ -1,4 +1,6 @@
 use axum::{Router, middleware};
+use sqlx::PgPool;
+use std::sync::Arc;
 
 use std::net::SocketAddr;
 
@@ -18,11 +20,11 @@ use tracing_subscriber::fmt::time::SystemTime;
 
 // utils import
 mod utils;
+use crate::utils::load_env::load_env;
+use crate::utils::load_config::{load_config, AppConfig};
 // db import
 mod db;
-use crate::utils::load_env::load_env;
 use db::connect_postgres::connect_pg;
-use sqlx::PgPool;
 
 // controllers import
 mod domains;
@@ -35,8 +37,11 @@ mod middlewares;
 use crate::middlewares::logging_middleware::logging_middleware;
 use crate::middlewares::request_timeout_middleware::timeout_middleware;
 
+
+
 #[derive(Clone, Debug)]
 pub struct AppState {
+    pub config: Arc<AppConfig>,
     pub db: PgPool,
     pub s3: S3AppState,
 }
@@ -55,24 +60,44 @@ async fn main() {
     load_env();
     initialize_logging();
 
+    let app_config = load_config();
+
+    let clean_config = match app_config {
+        Ok(config) => {
+            // println!("Configuration loaded successfully: {}", config.app.name);
+
+            if config.validate().is_err() {
+                error!("SERVER START-UP ERROR: FAILED TO LOAD SERVER CONFIGURATIONS!");
+
+                return;
+            }
+
+            config
+        }
+        Err(_e) => {
+            error!("SERVER START-UP ERROR: FAILED TO LOAD SERVER CONFIGURATIONS!");
+            return;
+        }
+    };
+
     let access_key_id = env::var("AWS_ACCESS_KEY").unwrap();
     let secret_access_key = env::var("AWS_SECRET_ACCESS_KEY").unwrap();
     // let aws_url = env::var("AWS_BUCKET_URL").unwrap();
     let aws_region = env::var("AWS_S3_BUCKET_REGION").expect("AWS_S3_BUCKET_REGION must be set");
 
     // note here that the "None" is in place of a session token
-    let creds = Credentials::from_keys(access_key_id, secret_access_key, None);
+    let s3_credentials = Credentials::from_keys(access_key_id, secret_access_key, None);
 
-    let config = aws_config::from_env()
+    let s3_config = aws_config::from_env()
         // .endpoint_url(aws_url)
         .region(Region::new(aws_region))
-        .credentials_provider(creds)
+        .credentials_provider(s3_credentials)
         .load()
         .await;
 
     // Initialize AWS S3 config
     // let config = aws_config::load_from_env().await;
-    let s3_client = Client::new(&config);
+    let s3_client = Client::new(&s3_config);
 
     let bucket_name = std::env::var("AWS_S3_BUCKET_NAME").expect("AWS_S3_BUCKET_NAME must be set");
 
@@ -94,9 +119,21 @@ async fn main() {
     let db_pool = connect_pg(database_url.clone()).await;
 
     let state = AppState {
+        config: Arc::new(clean_config),
         db: db_pool,
         s3: s3_state,
     };
+
+    // fn verify_config_loading(state: &AppState) {
+    //     println!(
+    //         "Config loaded successfully: {} is running on {}:{}",
+    //         state.config.app.name,
+    //         state.config.server.as_ref().unwrap().host,
+    //         state.config.server.as_ref().unwrap().port
+    //     );
+    // }
+
+    // verify_config_loading(&state);
 
     let app = Router::new()
         .nest("/api/v1/auth", auth_routes(&state))
@@ -113,8 +150,6 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
 
     let slice_db_url = format!("{}...", &database_url[0..25]);
-
-
 
     // Start server
     let listener = match tokio::net::TcpListener::bind(addr).await {

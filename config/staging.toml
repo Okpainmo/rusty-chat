@@ -1,0 +1,14 @@
+[app]
+environment = "production"
+# log_level = "warn"
+
+# [server]
+# port = 80
+
+# [database]
+# host = "prod-db.internal"
+# max_connections = 100
+
+[observability]
+enable_tracing = true
+enable_metrics = true

@@ -1,0 +1,37 @@
+[app]
+name = "rusty-chat-rest-api-server"
+# environment = "development"
+# log_level = "info"
+
+[client_integrations]
+allow_access_middleware = true
+allow_sessions_middleware = true
+allow_logging_middleware = true
+allow_request_timeout_middleware = true
+allow_admin_routes_protector_middleware = true
+# allow_rate_limit_middleware = true
+
+[server]
+host = "localhost"
+port = 8000
+# graceful_shutdown_secs = 10
+
+# [database]
+# engine = "postgres"
+# host = "localhost"
+# port = 5432
+# name = "app_db"
+# max_connections = 20
+# connect_timeout_secs = 5
+
+# [auth]
+# access_token_ttl_secs = 900
+# refresh_token_ttl_secs = 604800
+
+# [security]
+# bcrypt_cost = 12
+# rate_limit_per_minute = 60
+
+[observability]
+enable_tracing = true
+enable_metrics = true

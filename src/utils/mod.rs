@@ -4,3 +4,4 @@ pub mod generate_tokens;
 pub mod hashing_handler;
 pub mod load_env;
 pub mod verification_handler;
+pub mod load_config;
