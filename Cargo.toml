@@ -21,3 +21,5 @@ tower-cookies = "0.11.0"
 tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "json", "time"] }
 aws-credential-types = { version = "1.2.11", features = ["hardcoded-credentials"] }
+anyhow = "1.0.100"
+config = "0.15.19"
