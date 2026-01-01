@@ -1,14 +1,12 @@
 use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
-use axum::extract::Query;
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Extension, State},
     http::StatusCode,
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
 use chrono::NaiveDateTime;
@@ -97,7 +95,7 @@ pub async fn create_room(
     let co_member =  match sqlx::query_as::<_, UserLookUp>(
         "SELECT id, full_name, created_at, updated_at FROM users WHERE id = $1",
     )
-        .bind(&payload.co_member)
+        .bind(payload.co_member)
         .fetch_optional(&state.db)
         .await
         {
@@ -137,7 +135,7 @@ pub async fn create_room(
                 AND is_group =  $3
         ",
     )
-        .bind(&created_by)
+        .bind(created_by)
         .bind(&co_member.full_name)
         .bind(false)
         .fetch_all(&state.db)
@@ -185,7 +183,7 @@ pub async fn create_room(
     .bind(&co_member.full_name)
     .bind(false)
     .bind(created_by)
-    .bind(&co_member.id)
+    .bind(co_member.id)
     .fetch_one(&state.db)
     .await
     {
@@ -212,7 +210,7 @@ pub async fn create_room(
         RETURNING  id, room_id, user_id, role, joined_at, created_at, updated_at
         "#,
     )
-    .bind(&room.id)
+    .bind(room.id)
     .bind(created_by)
     .bind("admin")
     .bind(current_time_millis().to_string())

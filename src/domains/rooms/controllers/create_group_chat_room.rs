@@ -1,15 +1,12 @@
-use std::cmp::PartialEq;
 use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
-use axum::extract::Query;
 use axum::{
     Json,
-    extract::{Extension, Path, State},
+    extract::{Extension, State},
     http::StatusCode,
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
 use chrono::NaiveDateTime;
@@ -172,7 +169,7 @@ pub async fn create_group(
         RETURNING  id, room_id, user_id, role, joined_at, created_at, updated_at
         "#,
     )
-    .bind(&room.id)
+    .bind(room.id)
     .bind(created_by)
     .bind("admin")
     .bind(current_time_millis().to_string())
