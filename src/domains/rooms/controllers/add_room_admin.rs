@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 #[derive(Debug, Deserialize)]
-pub struct RemoveAdminPayload {
+pub struct AddAdminPayload {
     pub user_id: i64,
 }
 
@@ -19,12 +19,13 @@ pub struct Response {
     error: Option<String>,
 }
 
-pub async fn remove_room_admin(
+pub async fn add_room_admin(
     State(state): State<AppState>,
     Path(room_id): Path<i64>,
-    Json(payload): Json<RemoveAdminPayload>,
+    Json(payload): Json<AddAdminPayload>,
 ) -> impl IntoResponse {
-     let user_exists = sqlx::query(
+    // Check if user is already a member?
+    let user_exists = sqlx::query(
         r#"
         SELECT 1
         FROM users
@@ -65,11 +66,11 @@ pub async fn remove_room_admin(
             }),
         );
     }
-    
+
     let result = sqlx::query(
         r#"
         UPDATE room_members 
-        SET role = 'member' 
+        SET role = 'admin' 
         WHERE room_id = $1 AND user_id = $2
         "#
     )
@@ -92,18 +93,18 @@ pub async fn remove_room_admin(
                 (
                     StatusCode::OK,
                     Json(Response {
-                        response_message: "Room admin removed successfully".into(),
+                        response_message: "Room admin added successfully".into(),
                         error: None,
                     }),
                 )
             }
         },
         Err(e) => {
-            error!("REMOVE ROOM ADMIN REQUEST FAILED");
+            error!("ADD ROOM ADMIN REQUEST FAILED");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(Response {
-                    response_message: "Failed to remove room admin".into(),
+                    response_message: "Failed to add room admin".into(),
                     error: Some(format!("Database error: {}", e)),
                 }),
             )
