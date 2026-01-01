@@ -57,7 +57,7 @@ pub async fn get_room(
             (
                 StatusCode::NOT_FOUND,
                 Json(RoomResponse {
-                    response_message: "Room not found".into(),
+                    response_message: "Room not found or does not exist".into(),
                     response: None,
                     error: Some("Room with the provided ID does not exist".into()),
                 }),
