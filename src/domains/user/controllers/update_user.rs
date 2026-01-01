@@ -1,23 +1,16 @@
-use crate::domains::auth::controllers::login_user::LoginResponse;
-use crate::domains::auth::controllers::register_user::RegisterResponse;
-use crate::middlewares::auth_access_middleware::ErrorResponse;
-use crate::middlewares::auth_access_middleware::SessionInfo;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::{User, generate_tokens};
-use crate::utils::hashing_handler::hashing_handler;
 
 use crate::AppState;
 use axum::extract::State;
 use axum::{
     Json,
-    extract::Multipart,
-    extract::{Extension, Path, Request},
+    extract::{Extension, Path},
     http::StatusCode,
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use tower_cookies::Cookies;
 use tracing::error;
 use chrono::NaiveDateTime;

@@ -7,7 +7,7 @@ use crate::middlewares::admin_routes_protector::admin_routes_protector;
 use crate::middlewares::auth_access_middleware::access_middleware;
 use crate::middlewares::auth_sessions_middleware::sessions_middleware;
 use axum::routing::patch;
-use axum::{Router, middleware, routing::get};
+use axum::{Router, middleware};
 use tower_cookies::CookieManagerLayer;
 
 pub fn admin_routes(state: &AppState) -> Router<AppState> {

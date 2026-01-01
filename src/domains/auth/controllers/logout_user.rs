@@ -1,11 +1,9 @@
 use crate::AppState;
-use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::extract::State;
 use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use tower_cookies::{Cookie, Cookies};
-use tracing::{error, info};
+use tracing::error;
 use chrono::NaiveDateTime;
 
 #[derive(Debug, Serialize)]
@@ -85,7 +83,7 @@ pub async fn logout_user(
     .await;
 
     match user {
-        Ok(user) => (
+        Ok(_user) => (
             StatusCode::OK,
             Json(LogoutResponse {
                 response_message: "Logout successful".to_string(),

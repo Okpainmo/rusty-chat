@@ -1,14 +1,11 @@
 use crate::AppState;
-use crate::middlewares::auth_access_middleware::{ErrorResponse, SessionInfo};
-use axum::extract::{Request, State};
+use axum::extract::State;
 use axum::{
     Json,
-    extract::{Extension, Path},
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use serde::Serialize;
 use tracing::error;
 use chrono::NaiveDateTime;
 // use crate::middlewares::auth_sessions_middleware::SessionUser;

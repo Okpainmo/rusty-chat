@@ -95,7 +95,7 @@ pub async fn register_user(
         .await;
 
     match email_query {
-        Ok(Some(existing_user)) => {
+        Ok(Some(_existing_user)) => {
             // Email already exists (query condition)
             error!("REGISTRATION FAILED: EMAIL ALREADY EXISTS");
 
@@ -144,7 +144,7 @@ pub async fn register_user(
         .await;
 
     match phone_number_query {
-        Ok(Some(existing_user)) => {
+        Ok(Some(_existing_user)) => {
             // Email already exists (query condition)
             error!("REGISTRATION FAILED: PHONE NUMBER ALREADY EXISTS");
 

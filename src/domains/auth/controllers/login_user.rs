@@ -1,14 +1,12 @@
-use crate::domains::auth::controllers::register_user::RegisterResponse;
 use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::extract::State;
-use axum::{Json, extract::Extension, http::StatusCode, response::IntoResponse};
+use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 // utils import
 use crate::AppState;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::verification_handler::verification_handler; // your existing password verification function
-use tower_cookies::{Cookie, CookieManagerLayer, Cookies};
+use tower_cookies::Cookies;
 use tracing::error;
 use chrono::NaiveDateTime;
 
