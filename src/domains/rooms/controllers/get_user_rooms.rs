@@ -1,7 +1,7 @@
 use crate::AppState;
-use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
+// use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     Json,

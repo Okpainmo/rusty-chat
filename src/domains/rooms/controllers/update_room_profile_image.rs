@@ -2,7 +2,6 @@ use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use crate::utils::file_upload_handler::upload_file;
 use axum::extract::State;
-use axum::extract::multipart::{Field, MultipartError};
 use axum::{
     Json,
     extract::Multipart,
@@ -10,8 +9,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use serde::Serialize;
 use tracing::error;
 use chrono::NaiveDateTime;
 use crate::utils::file_upload_handler::UploadType;
@@ -31,23 +29,23 @@ pub struct Room {
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(sqlx::FromRow)]
 struct RoomLookup {
-    id: i64,
+    // id: i64,
     created_by: Option<i64>,
-    is_group: bool,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    // is_group: bool,
+    // pub created_at: NaiveDateTime,
+    // pub updated_at: NaiveDateTime,
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(sqlx::FromRow)]
 struct RoomMemberLookup {
-    id: i64,
-    room_id: i64,
-    user_id: i64,
+    // id: i64,
+    // room_id: i64,
+    // user_id: i64,
     role: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    // pub created_at: NaiveDateTime,
+    // pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize)]
