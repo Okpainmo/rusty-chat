@@ -1,9 +1,8 @@
-use axum::{Router, extract::Extension, middleware, routing::post};
+use axum::{Router, middleware};
 
 use std::net::SocketAddr;
 
 // environmental variables...
-use dotenvy;
 use std::env;
 
 // AWS S3
@@ -113,7 +112,7 @@ async fn main() {
     // Server address
     let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
 
-    let slice_db_url = format!("{}...", &database_url[0..40]);
+    let slice_db_url = format!("{}...", &database_url[0..25]);
 
 
 
