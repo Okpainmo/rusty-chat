@@ -91,11 +91,11 @@ pub async fn update_room(
         }
     };
 
-    // 2. Check if user is an admin or creator or app admin
+    // 2. Check if user is the room creator or app admin
     let member_result = sqlx::query_as::<_, RoomMemberLookup>(
         "SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2"
     )
-    .bind(room_id)
+    .bind(&room.id)
     .bind(session.user.id)
     .fetch_optional(&state.db)
     .await;
@@ -129,7 +129,7 @@ pub async fn update_room(
 
     if payload.is_public.is_some() {
         set_clauses.push(format!("is_public = ${}", param_index));
-        param_index += 1;
+        // param_index += 1;
     }
 
     if set_clauses.is_empty() {
@@ -155,7 +155,7 @@ pub async fn update_room(
         set_clauses.join(", ")
     );
 
-    let mut query_builder = sqlx::query_as::<_, Room>(&query).bind(room_id);
+    let mut query_builder = sqlx::query_as::<_, Room>(&query).bind(&room.id);
 
     if let Some(room_name) = payload.room_name {
         query_builder = query_builder.bind(room_name);
