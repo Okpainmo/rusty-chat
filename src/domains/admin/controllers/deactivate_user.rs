@@ -1,11 +1,9 @@
 use crate::AppState;
-use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::extract::{Path, State};
-use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
+use axum::{Json, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use tower_cookies::{Cookie, Cookies};
-use tracing::{error, info};
+use tower_cookies::Cookies;
+use tracing::error;
 use chrono::NaiveDateTime;
 
 #[derive(Debug, Serialize)]
@@ -37,7 +35,7 @@ pub struct UserProfile {
 pub async fn deactivate_user(
     State(state): State<AppState>,
     Path(user_id): Path<i64>,
-    cookies: Cookies,
+    _cookies: Cookies,
 ) -> impl IntoResponse {
     let result = sqlx::query_as::<_, UserProfile>(
         r#"
