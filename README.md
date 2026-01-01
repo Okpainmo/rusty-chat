@@ -40,7 +40,7 @@ docker run -d --name rusty-chat__dev_db -p 5433:5432 -e POSTGRES_USER=okpainmo -
 cargo run # single session - no auto-refresh on file save
 ```
 
-Or 
+Or
 
 - Install `cargo-watch`
 
@@ -55,7 +55,6 @@ cargo dev
 ```
 
 > The above command runs the server with `cargo-watch`. See the alias/command config inside `.cargo.config.toml`. Basically, it does the same thing as below.
-
 
 ```shell
 cargo watch -q -c -w src/ -x "run"
@@ -75,7 +74,7 @@ E.g.
 sqlx migrate add init
 ```
 
-5. Migrate(Sync with the DB) 
+5. Migrate(Sync with the DB)
 
 ```shell
 sqlx migrate run --database-url <database-url>
@@ -86,5 +85,11 @@ E.g.
 ```shell
 sqlx migrate run --database-url postgres://okpainmo:supersecret@localhost:5433/rusty_chat_db_dev
 ```
+
+## Operating System Issues - Including WSL.
+
+To avoid any issues related to the operating system, it is recommended to use a build from a Linux environment.
+
+> WSL(Windows Sub-system For Linux) works just fine in case you're building from a Windows environment.
 
 Cheers!!!
