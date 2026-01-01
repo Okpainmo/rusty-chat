@@ -1,8 +1,5 @@
-use crate::domains::auth::controllers::register_user::RegisterResponse;
 use crate::utils::hashing_handler::hashing_handler;
 use crate::utils::load_env::load_env;
-use axum::Json;
-use axum::http::StatusCode;
 use chrono::{Duration, Utc};
 use jsonwebtoken::errors::Error as JwtError;
 use jsonwebtoken::{EncodingKey, Header, encode};

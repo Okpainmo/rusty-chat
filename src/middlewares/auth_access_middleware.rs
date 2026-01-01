@@ -1,19 +1,16 @@
 use crate::middlewares::auth_sessions_middleware::{SessionsMiddlewareOutput, UserProfile};
-use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::generate_tokens::{User, generate_tokens};
 use axum::{
-    Extension, Json,
-    extract::{Request, State},
+    Json,
+    extract::Request,
     http::{StatusCode, header},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use sqlx;
-use sqlx::PgPool;
-use std::sync::Arc;
-use tower_cookies::{Cookie, Cookies};
+use tower_cookies::Cookies;
 use tracing::error;
 
 // ============================================================================
@@ -104,7 +101,7 @@ fn verify_access_token(token: &str, secret: &str, user: &UserProfile) -> TokenSt
 pub async fn access_middleware(
     // State(state): State<crate::AppState>,
     cookies: Cookies,
-    mut req: Request,
+    req: Request,
     next: Next,
 ) -> impl IntoResponse {
     let session_state = MiddlewareState {
@@ -115,7 +112,7 @@ pub async fn access_middleware(
     // ----------------------------------------------------------
     // AUTH COOKIE CHECK
     // ----------------------------------------------------------
-    let auth_cookie = cookies.get(&session_state.cookie_name).ok_or_else(|| {
+    let _auth_cookie = cookies.get(&session_state.cookie_name).ok_or_else(|| {
         error!("MISSING AUTH COOKIE!");
         (
             StatusCode::UNAUTHORIZED,
@@ -182,7 +179,7 @@ pub async fn access_middleware(
     // ----------------------------------------------------------
     // TOKEN GENERATION (FOR RENEWAL)
     // ----------------------------------------------------------
-    let tokens = match generate_tokens(
+    let _tokens = match generate_tokens(
         "auth",
         User {
             id: sessions_middleware_output.user.id,

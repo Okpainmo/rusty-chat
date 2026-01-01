@@ -1,19 +1,14 @@
-use crate::middlewares::auth_sessions_middleware::{SessionsMiddlewareOutput, UserProfile};
-use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
-use crate::utils::generate_tokens::{User, generate_tokens};
+use crate::middlewares::auth_sessions_middleware::UserProfile;
+use crate::utils::generate_tokens::User;
 use axum::{
-    Extension, Json,
+    Json,
     extract::{Request, State},
-    http::{StatusCode, header},
+    http::StatusCode,
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use sqlx;
-use sqlx::PgPool;
-use std::sync::Arc;
-use tower_cookies::{Cookie, Cookies};
 use tracing::error;
 
 // ============================================================================
@@ -66,7 +61,7 @@ enum TokenStatus {
 
 pub async fn admin_routes_protector(
     State(state): State<crate::AppState>,
-    mut req: Request,
+    req: Request,
     next: Next,
 ) -> impl IntoResponse {
     let email = match req.headers().get("email").and_then(|h| h.to_str().ok()) {
@@ -104,7 +99,7 @@ pub async fn admin_routes_protector(
         WHERE email = $1
         "#,
     )
-    .bind(&email)
+    .bind(email)
     .fetch_optional(&state.db)
     .await
     {

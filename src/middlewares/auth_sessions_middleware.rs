@@ -1,6 +1,6 @@
 use axum::extract::State;
 use axum::{
-    Extension, Json,
+    Json,
     extract::Request,
     http::{StatusCode, header},
     middleware::Next,
@@ -8,13 +8,10 @@ use axum::{
 };
 use jsonwebtoken::{DecodingKey, Validation, decode, errors::ErrorKind};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
-use std::sync::Arc;
 use tower_cookies::Cookies;
 use tracing::error;
 use chrono::NaiveDateTime;
 
-use crate::utils::generate_tokens::User;
 
 // ============================================================================
 // Types
@@ -98,7 +95,7 @@ pub async fn sessions_middleware(
             )
         })?;
 
-    let authorization = req
+    let _authorization = req
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -153,7 +150,7 @@ pub async fn sessions_middleware(
         WHERE email = $1
         "#,
     )
-    .bind(&email)
+    .bind(email)
     .fetch_optional(&state.db)
     .await
     {

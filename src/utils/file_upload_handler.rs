@@ -1,13 +1,6 @@
 use aws_sdk_s3::Client;
 use axum::extract::multipart::{Field, MultipartError};
-use axum::{
-    Router,
-    extract::Multipart,
-    extract::State,
-    http::StatusCode,
-    response::Json,
-    routing::{get, post},
-};
+use axum::extract::State;
 use serde::Serialize;
 use std::env;
 
@@ -49,7 +42,6 @@ pub enum UploadType {
     RoomProfileImage,
 }
 
-
 pub async fn upload_file(
     State(state): State<&crate::AppState>,
     field: Field<'_>,
@@ -63,7 +55,7 @@ pub async fn upload_file(
         .file_name()
         .expect("Failed to extract object file name!")
         .split('.')
-        .last()
+        .next_back()
         .expect("Failed to get object extension");
 
     let file_key = match upload_type {
