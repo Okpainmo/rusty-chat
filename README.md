@@ -1,6 +1,6 @@
 # Rusty Chat.
 
-A modular(domain-driven-development patterned) opensource chat application backend built with the Rust programming language(and the Axum framework).
+A modular(domain-driven-development patterned) opensource REST API layer/service for the Rusty Chat project.
 
 ## Features
 
