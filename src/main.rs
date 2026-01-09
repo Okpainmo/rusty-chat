@@ -13,9 +13,9 @@ use aws_config::Region;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 
+// logging init with the tracing crate
 use tracing::info;
 use tracing::error;
-// logging init with the tracing crate
 use tracing_subscriber::fmt::time::SystemTime;
 
 // utils import
@@ -32,6 +32,7 @@ use crate::domains::admin::router::admin_routes;
 use crate::domains::auth::router::auth_routes;
 use crate::domains::user::router::user_routes;
 use crate::domains::rooms::router::rooms_routes;
+use crate::domains::messages::router::messages_routes;
 
 mod middlewares;
 use crate::middlewares::logging_middleware::logging_middleware;
@@ -111,7 +112,7 @@ async fn main() {
     let user = env::var("POSTGRES_USER").unwrap();
     let pass = env::var("POSTGRES_PASSWORD").unwrap();
     let host = env::var("POSTGRES_HOST").unwrap();
-    let db_port = env::var("POSTGRES_PORT").unwrap();
+    let db_port = env::var("POSTGRES_PORT").unwrap(); 
     let db = env::var("POSTGRES_DB").unwrap();
 
     let database_url = format!("postgres://{}:{}@{}:{}/{}", user, pass, host, db_port, db);
@@ -140,6 +141,7 @@ async fn main() {
         .nest("/api/v1/user", user_routes(&state))
         .nest("/api/v1/admin", admin_routes(&state))
         .nest("/api/v1/rooms", rooms_routes(&state))
+        .nest("/api/v1/messages", messages_routes(&state))
         .layer(middleware::from_fn(logging_middleware))
         .layer(middleware::from_fn(timeout_middleware))
         .with_state(state);
