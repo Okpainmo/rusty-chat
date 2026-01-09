@@ -20,8 +20,6 @@ pub struct UserProfile {
     refresh_token: String,
     status: String,
     last_seen: Option<String>,
-    #[serde(skip_serializing)]
-    password: String,
     is_admin: bool,
     is_active: bool,
     country: String,
@@ -32,16 +30,15 @@ pub struct UserProfile {
 }
 
 #[derive(Debug, Serialize)]
-pub struct UserResponse {
-    response_message: String,
-    response: Option<UserProfile>,
-    error: Option<String>,
+pub struct OutputCore {
+    count: usize,
+    users: Option<Vec<UserProfile>>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct UsersResponse {
     response_message: String,
-    response: Option<Vec<UserProfile>>,
+    response: Option<OutputCore>,
     error: Option<String>,
 }
 
@@ -50,25 +47,8 @@ pub async fn get_all_users(
     // req: Request
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    // let access_middleware_output = req
-    //     .extensions()
-    //     .get::<SessionInfo>()
-    //     // .cloned()
-    //     .ok_or_else(|| {
-    //         (
-    //             StatusCode::NOT_FOUND,
-    //             Json(ErrorResponse {
-    //                 error: "Not Found".to_string(),
-    //                 response_message: "_ User not received from sessions middleware".to_string(),
-    //             }),
-    //         )
-    //     }).unwrap()
-    //     .clone();
-    //
-    // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
-
     let users_result = sqlx::query_as::<_, UserProfile>(
-        "SELECT id, full_name, email, profile_image, password, access_token, refresh_token, status, last_seen, is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at FROM users"
+        "SELECT id, full_name, email, profile_image, access_token, refresh_token, status, last_seen, is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at FROM users"
     )
     .fetch_all(&state.db)
     .await;
@@ -78,7 +58,10 @@ pub async fn get_all_users(
             StatusCode::OK,
             Json(UsersResponse {
                 response_message: "Users fetched successfully".to_string(),
-                response: Some(users),
+                response: Some(OutputCore {
+                    count: users.len(),
+                    users: Some(users),
+                }),
                 error: None,
             }),
         ),

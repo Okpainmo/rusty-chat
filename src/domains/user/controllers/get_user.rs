@@ -52,23 +52,6 @@ pub async fn get_user(
     Path(user_id): Path<i64>,
     // req: Request,
 ) -> impl IntoResponse {
-    // let access_middleware_output = req
-    //     .extensions()
-    //     .get::<SessionInfo>()
-    //     // .cloned()
-    //     .ok_or_else(|| {
-    //         (
-    //             StatusCode::NOT_FOUND,
-    //             Json(ErrorResponse {
-    //                 error: "Not Found".to_string(),
-    //                 response_message: "_ User not received from sessions middleware".to_string(),
-    //             }),
-    //         )
-    //     }).unwrap()
-    //     .clone();
-    //
-    // println!("Data received via the sessions and then the access middlewares: {:?}", access_middleware_output);
-
     let user_result = sqlx::query_as::<_, UserProfile>(
         "SELECT id, full_name, email, profile_image, password, access_token, refresh_token, status, last_seen, is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at FROM users WHERE id = $1"
     )

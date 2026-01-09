@@ -36,8 +36,6 @@ pub struct UserProfile {
     refresh_token: String,
     status: String,
     last_seen: Option<String>,
-    #[serde(skip_serializing)]
-    password: String,
     is_admin: bool,
     is_active: bool,
     country: String,
@@ -155,7 +153,7 @@ pub async fn update_user(
         UPDATE users
         SET {}, updated_at = NOW()
         WHERE id = $1
-        RETURNING id, full_name, email, profile_image, password,
+        RETURNING id, full_name, email, profile_image,
         access_token, refresh_token, status, last_seen, is_active, is_admin, country, phone_number, is_logged_out, created_at, updated_at
 "#,
         set_clauses.join(", ")
