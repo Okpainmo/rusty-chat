@@ -8,7 +8,7 @@ argon2 = "0.5.3"
 aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "1.117.0", features = ["behavior-version-latest"] }
 axum = { version = "0.8.7", features = ["multipart"] }
-chrono = { version = "0.4.42", features = ["serde"] }
+chrono = { version = "0.4.42", features = ["serde", "clock"] }
 dotenvy = "0.15.7"
 jsonwebtoken = {version = "10.2.0", features = ["rust_crypto"]}
 rand = "0.8"
@@ -23,3 +23,4 @@ tracing-subscriber = { version = "0.3.22", features = ["fmt", "json", "time"] }
 aws-credential-types = { version = "1.2.11", features = ["hardcoded-credentials"] }
 anyhow = "1.0.100"
 config = "0.15.19"
+uuid = { version = "1.15.1", features = ["v4"] }
