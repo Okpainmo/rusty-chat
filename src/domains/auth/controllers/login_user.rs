@@ -122,15 +122,15 @@ pub async fn login_user(
 
             let _ = sqlx::query_as::<_, UserProfile>(
                 r#"
-                        UPDATE users
-                        SET
-                            access_token = $1,
-                            refresh_token = $2,
-                            is_logged_out = $3,
-                            updated_at = NOW()
-                        WHERE email = $4
-                    "#,
-            )
+                    UPDATE users
+                    SET
+                        access_token = $1,
+                        refresh_token = $2,
+                        is_logged_out = $3,
+                        updated_at = NOW()
+                    WHERE email = $4
+                "#,
+        )
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
             .bind(false)

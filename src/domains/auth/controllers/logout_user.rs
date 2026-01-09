@@ -75,8 +75,8 @@ pub async fn logout_user(
                 updated_at
             "#,
     )
-    .bind("") // profile_image_url
-    .bind("") // profile_image_url
+    .bind("") // access_token
+    .bind("") // refresh_token
     .bind(true)
     .bind(&params.user_email)
     .fetch_one(&state.db)

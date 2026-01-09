@@ -11,7 +11,7 @@ use tower_cookies::Cookies;
 use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
-pub struct RegisterRequest {
+pub struct InSpecs {
     first_name: String,
     last_name: String,
     email: String,
@@ -58,7 +58,7 @@ pub struct RegisterResponse {
 pub async fn register_user(
     cookies: Cookies,
     State(state): State<AppState>,
-    Json(payload): Json<RegisterRequest>,
+    Json(payload): Json<InSpecs>,
 ) -> impl IntoResponse {
     // Hash the password
     let hashed_password = match hashing_handler(payload.password.as_str()).await {
