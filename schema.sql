@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     room_profile_image TEXT DEFAULT '',
     bookmarked_by BIGINT[] DEFAULT '{}',
     archived_by BIGINT[] DEFAULT '{}',
+    pinned_by BIGINT[] DEFAULT '{}',
     is_public BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -49,6 +50,7 @@ COMMENT ON COLUMN rooms.room_profile_image IS 'URL or path of the room profile i
 -- GIN indexes for rooms array columns
 CREATE INDEX IF NOT EXISTS idx_rooms_bookmarked_by ON rooms USING GIN(bookmarked_by);
 CREATE INDEX IF NOT EXISTS idx_rooms_archived_by ON rooms USING GIN(archived_by);
+CREATE INDEX IF NOT EXISTS idx_rooms_pinned_by ON rooms USING GIN(pinned_by);
 
 -- Room Members Table
 CREATE TABLE IF NOT EXISTS room_members (
@@ -69,12 +71,12 @@ CREATE TABLE IF NOT EXISTS messages (
   room_id BIGINT REFERENCES rooms(id) ON DELETE CASCADE,
   sender_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   type TEXT NOT NULL DEFAULT 'regular',
-  content JSONB,
+  text_content TEXT,
+  audio_content TEXT,
+  video_content TEXT,
+  images TEXT[],
   status TEXT NOT NULL DEFAULT 'sent',
   sent_at VARCHAR(20) NOT NULL,
-  edited_at VARCHAR(20),
-  is_bookmarked BOOLEAN NOT NULL DEFAULT FALSE,
-  is_archived BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT type_check CHECK (type IN ('regular', 'voice_note', 'voice_call', 'video_call')),
@@ -107,3 +109,37 @@ CREATE TABLE IF NOT EXISTS call_logs (
    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
    CONSTRAINT status_check CHECK (status IN ('missed', 'completed', 'rejected'))
 );
+
+-- Message Bookmarks Table
+CREATE TABLE IF NOT EXISTS message_bookmarks (
+    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_bookmarks_user ON message_bookmarks (user_id);
+CREATE INDEX IF NOT EXISTS idx_message_bookmarks_message ON message_bookmarks (message_id);
+
+-- Message Archives Table
+CREATE TABLE IF NOT EXISTS message_archives (
+    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_archives_user ON message_archives (user_id);
+CREATE INDEX IF NOT EXISTS idx_message_archives_message ON message_archives (message_id);
+
+-- Message Edits Table
+CREATE TABLE IF NOT EXISTS message_edits (
+    id BIGSERIAL PRIMARY KEY,
+    message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    previous_context TEXT NOT NULL,
+    new_content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_edits_message_id ON message_edits (message_id);
+CREATE INDEX IF NOT EXISTS idx_message_edits_created_at ON message_edits (created_at);
