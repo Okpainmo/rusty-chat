@@ -72,9 +72,10 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   type TEXT NOT NULL DEFAULT 'regular',
   text_content TEXT,
-  audio_content TEXT,
-  video_content TEXT,
-  images TEXT[],
+  attachment_1 TEXT,
+  attachment_2 TEXT,
+  attachment_3 TEXT,
+  attachment_4 TEXT,
   status TEXT NOT NULL DEFAULT 'sent',
   sent_at VARCHAR(20) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -87,14 +88,22 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS message_status_receipts (
      id BIGSERIAL PRIMARY KEY,
      message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-     user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
      room_id    BIGINT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+     sender_id  BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     receiver_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
      status TEXT NOT NULL,
+     action TEXT NOT NULL,
      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-     CONSTRAINT message_status_receipts_unique_message_user UNIQUE (message_id, user_id),
-     CONSTRAINT message_status_check CHECK (status IN ('sent', 'delivered', 'seen'))
+     CONSTRAINT message_status_check CHECK (status IN ('sent', 'delivered', 'seen')),
+     CONSTRAINT message_status_receipts_action_check CHECK (action IN ('original-send', 'edit', 'delete', 'reaction', 'system'))
 );
+
+-- Index for message_status_receipts.action
+CREATE INDEX IF NOT EXISTS idx_message_status_receipts_action ON message_status_receipts (action);
+
+-- Index for message_status_receipts history lookups
+CREATE INDEX IF NOT EXISTS idx_message_status_receipts_message ON message_status_receipts (message_id, created_at);
 
 -- Call Logs Table
 CREATE TABLE IF NOT EXISTS call_logs (
