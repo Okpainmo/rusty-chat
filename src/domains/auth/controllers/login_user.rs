@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::AppState;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
 use crate::utils::verification_handler::verification_handler; // your existing password verification function
+use chrono::NaiveDateTime;
 use tower_cookies::Cookies;
 use tracing::error;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct UserProfile {
@@ -130,7 +130,7 @@ pub async fn login_user(
                         updated_at = NOW()
                     WHERE email = $4
                 "#,
-        )
+            )
             .bind(&tokens.access_token)
             .bind(&tokens.refresh_token)
             .bind(false)
@@ -143,7 +143,10 @@ pub async fn login_user(
                 Json(LoginResponse {
                     response_message: "Login successful".to_string(),
                     response: Some(ResponseCore {
-                        user_profile: UserProfile {is_logged_out: false, ..user},
+                        user_profile: UserProfile {
+                            is_logged_out: false,
+                            ..user
+                        },
                         access_token: tokens.access_token,
                         refresh_token: tokens.refresh_token,
                     }),

@@ -1,14 +1,14 @@
-use crate::utils::generate_tokens::User;
-use crate::utils::generate_tokens::generate_tokens;
-use axum::extract::State;
-use axum::{Json, http::StatusCode, response::IntoResponse};
-use serde::{Deserialize, Serialize};
-use tracing::error;
 use crate::AppState;
 use crate::utils::cookie_deploy_handler::deploy_auth_cookie;
+use crate::utils::generate_tokens::User;
+use crate::utils::generate_tokens::generate_tokens;
 use crate::utils::hashing_handler::hashing_handler;
-use tower_cookies::Cookies;
+use axum::extract::State;
+use axum::{Json, http::StatusCode, response::IntoResponse};
 use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
+use tower_cookies::Cookies;
+use tracing::error;
 
 #[derive(Debug, Deserialize)]
 pub struct InSpecs {
@@ -17,7 +17,7 @@ pub struct InSpecs {
     email: String,
     password: String,
     country: String,
-    phone_number: String
+    phone_number: String,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -33,7 +33,7 @@ pub struct UserProfile {
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct UserLookUp{
+pub struct UserLookUp {
     email: String,
     phone_number: String,
     pub created_at: NaiveDateTime,
@@ -89,10 +89,10 @@ pub async fn register_user(
         WHERE email = $1
         LIMIT 1
         "#,
-        )
-        .bind(&payload.email)
-        .fetch_optional(&state.db)
-        .await;
+    )
+    .bind(&payload.email)
+    .fetch_optional(&state.db)
+    .await;
 
     match email_query {
         Ok(Some(_existing_user)) => {
@@ -139,9 +139,9 @@ pub async fn register_user(
         LIMIT 1
         "#,
     )
-        .bind(&payload.phone_number)
-        .fetch_optional(&state.db)
-        .await;
+    .bind(&payload.phone_number)
+    .fetch_optional(&state.db)
+    .await;
 
     match phone_number_query {
         Ok(Some(_existing_user)) => {
@@ -176,8 +176,6 @@ pub async fn register_user(
         }
     }
 
-
-
     let full_name = format!("{} {}", payload.first_name, payload.last_name);
 
     // Create user
@@ -203,14 +201,14 @@ pub async fn register_user(
             updated_at
         "#,
     )
-        .bind(&payload.email)
-        .bind(&hashed_password)
-        .bind(&full_name)
-        .bind("")
-        .bind(payload.country)
-        .bind(payload.phone_number)
-        .fetch_one(&state.db)
-        .await;
+    .bind(&payload.email)
+    .bind(&hashed_password)
+    .bind(&full_name)
+    .bind("")
+    .bind(payload.country)
+    .bind(payload.phone_number)
+    .fetch_one(&state.db)
+    .await;
 
     match result {
         Ok(new_user) => {
@@ -221,7 +219,7 @@ pub async fn register_user(
                     email: payload.email.clone(),
                 },
             )
-                .await
+            .await
             {
                 Ok(tokens) => tokens,
                 Err(e) => {
@@ -249,11 +247,11 @@ pub async fn register_user(
                 WHERE id = $3
                 "#,
             )
-                .bind(&tokens.access_token)
-                .bind(&tokens.refresh_token)
-                .bind(new_user.id)
-                .execute(&state.db)
-                .await;
+            .bind(&tokens.access_token)
+            .bind(&tokens.refresh_token)
+            .bind(new_user.id)
+            .execute(&state.db)
+            .await;
 
             if let Err(e) = update_result {
                 error!("FAILED TO UPDATE TOKENS: {}", e);

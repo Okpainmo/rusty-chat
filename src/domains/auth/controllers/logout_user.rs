@@ -1,10 +1,10 @@
 use crate::AppState;
 use axum::extract::State;
 use axum::{Json, extract::Query, http::StatusCode, response::IntoResponse};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use tower_cookies::{Cookie, Cookies};
 use tracing::error;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
