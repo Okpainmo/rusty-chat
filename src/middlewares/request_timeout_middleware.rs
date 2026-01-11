@@ -1,10 +1,4 @@
-use axum::{
-    Json,
-    extract::Request,
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-};
+use axum::{Json, extract::Request, http::StatusCode, middleware::Next, response::Response};
 use serde::Serialize;
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
