@@ -1,11 +1,6 @@
 use crate::AppState;
 // use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
-use axum::{
-    extract::{State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use chrono::NaiveDateTime;
 use serde::Serialize;
 use tracing::error;
@@ -18,6 +13,7 @@ pub struct Room {
     pub created_by: Option<i64>,
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
+    pub pinned_by: Vec<i64>,
     pub room_profile_image: Option<String>,
     pub co_member: Option<i64>,
     pub co_members: Option<Vec<i64>>,
@@ -62,9 +58,9 @@ pub async fn get_all_private_rooms(
 
     // Fetch rooms that are NOT public AND the user is a member of
     let result = sqlx::query_as::<_, Room>(
-       r#"
+        r#"
             SELECT * FROM rooms WHERE is_group = false
-       "#
+       "#,
     )
     .fetch_all(&state.db)
     .await;

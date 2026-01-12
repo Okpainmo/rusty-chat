@@ -1,10 +1,5 @@
 use crate::AppState;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use chrono::NaiveDateTime;
 use serde::Serialize;
 use tracing::error;
@@ -33,9 +28,7 @@ pub struct RoomsResponse {
     error: Option<String>,
 }
 
-pub async fn get_all_group_rooms(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_all_group_rooms(State(state): State<AppState>) -> impl IntoResponse {
     let result = sqlx::query_as::<_, Room>("SELECT * FROM rooms WHERE is_group = true")
         .fetch_all(&state.db)
         .await;

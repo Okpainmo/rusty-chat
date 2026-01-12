@@ -1,5 +1,6 @@
 use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
+use crate::utils::file_upload_handler::UploadType;
 use crate::utils::file_upload_handler::upload_file;
 use axum::extract::State;
 use axum::{
@@ -9,10 +10,9 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::NaiveDateTime;
 use serde::Serialize;
 use tracing::error;
-use chrono::NaiveDateTime;
-use crate::utils::file_upload_handler::UploadType;
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct Room {
     pub id: i64,
@@ -21,8 +21,9 @@ pub struct Room {
     pub created_by: Option<i64>,
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
+    pub pinned_by: Vec<i64>,
     pub room_profile_image: Option<String>,
-    pub co_member: Option<i64>, // for private rooms only
+    pub co_member: Option<i64>,       // for private rooms only
     pub co_members: Option<Vec<i64>>, // for private rooms only
     pub is_public: bool,
     pub created_at: NaiveDateTime,
@@ -63,11 +64,11 @@ pub async fn update_room_profile_image(
 ) -> impl IntoResponse {
     // Verify room exists and get room details
     let room_result = sqlx::query_as::<_, RoomLookup>(
-        "SELECT id, created_by, is_group, created_at, updated_at FROM rooms WHERE id = $1"
+        "SELECT id, created_by, is_group, created_at, updated_at FROM rooms WHERE id = $1",
     )
-        .bind(room_id)
-        .fetch_optional(&state.db)
-        .await;
+    .bind(room_id)
+    .fetch_optional(&state.db)
+    .await;
 
     let room = match room_result {
         Ok(Some(room)) => room,
@@ -135,7 +136,8 @@ pub async fn update_room_profile_image(
     };
 
     // Only admin or creator can update room profile image
-    if member.role != "admin" && Some(session.user.id) != room.created_by && !session.user.is_admin {
+    if member.role != "admin" && Some(session.user.id) != room.created_by && !session.user.is_admin
+    {
         error!("UNAUTHORIZED ROOM PROFILE IMAGE UPDATE ATTEMPT!");
 
         return (
@@ -176,21 +178,22 @@ pub async fn update_room_profile_image(
         }
     };
 
-    let file_url = match upload_file(State(&state), file, &room_id, UploadType::RoomProfileImage).await {
-        Ok(file_url) => file_url,
-        Err(e) => {
-            error!("ROOM PROFILE IMAGE UPLOAD FAILED!");
+    let file_url =
+        match upload_file(State(&state), file, &room_id, UploadType::RoomProfileImage).await {
+            Ok(file_url) => file_url,
+            Err(e) => {
+                error!("ROOM PROFILE IMAGE UPLOAD FAILED!");
 
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(UpdateResponse {
-                    response_message: "Failed to upload room profile image".into(),
-                    response: None,
-                    error: Some(format!("File upload error: {}", e)),
-                }),
-            );
-        }
-    };
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(UpdateResponse {
+                        response_message: "Failed to upload room profile image".into(),
+                        response: None,
+                        error: Some(format!("File upload error: {}", e)),
+                    }),
+                );
+            }
+        };
 
     let res = sqlx::query_as::<_, Room>(
         r#"
@@ -199,7 +202,7 @@ pub async fn update_room_profile_image(
                 room_profile_image = $1,
                 updated_at = NOW()
             WHERE id = $2
-            RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, room_profile_image, co_member, co_members, is_public, created_at, updated_at
+            RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, pinned_by, room_profile_image, co_member, co_members, is_public, created_at, updated_at
             "#,
     )
         .bind(file_url)

@@ -6,16 +6,16 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateRoomPayload {
     // pub room_name: String,
     pub co_members: Vec<i64>,
-    pub room_name: String
+    pub room_name: String,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -34,6 +34,7 @@ pub struct Room {
     pub created_by: Option<i64>,
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
+    pub pinned_by: Vec<i64>,
     pub co_members: Vec<i64>, // for group rooms only
     pub is_public: bool,
     pub created_at: NaiveDateTime,
@@ -85,9 +86,9 @@ pub async fn create_group(
         match sqlx::query_as::<_, UserLookUp>(
             "SELECT id, full_name, created_at, updated_at FROM users WHERE id = $1",
         )
-            .bind(member)
-            .fetch_optional(&state.db)
-            .await
+        .bind(member)
+        .fetch_optional(&state.db)
+        .await
         {
             Ok(Some(member)) => {
                 if created_by == member.id {
@@ -100,11 +101,11 @@ pub async fn create_group(
                             error: Some("Room creation error".to_string()),
                             response: None,
                         }),
-                    )
+                    );
                 }
 
                 member
-            },
+            }
             Ok(None) => {
                 error!("ROOM CREATION ERROR: AT LEAST ONE CO-MEMBER DATA NOT PROVIDED!");
 
@@ -115,8 +116,8 @@ pub async fn create_group(
                         error: Some("Room creation error".to_string()),
                         response: None,
                     }),
-                )
-            },
+                );
+            }
             Err(e) => {
                 error!("ROOM CREATION ERROR!");
 
@@ -126,17 +127,17 @@ pub async fn create_group(
                         response_message: format!("Co-member with id: '{}' not found", member),
                         error: Some(format!("Room creation error: {:?}", e)),
                         response: None,
-                    })
-                )
+                    }),
+                );
             }
         };
-    };
+    }
 
     let room = match sqlx::query_as::<_, Room>(
         r#"
         INSERT INTO rooms (room_name, is_group, created_by, co_members)
         VALUES ($1, $2, $3, $4)
-        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, co_members, is_public, created_at, updated_at
+        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, pinned_by, co_members, is_public, created_at, updated_at
         "#,
     )
     .bind(&payload.room_name)
@@ -200,12 +201,12 @@ pub async fn create_group(
         RETURNING id, room_id, user_id, role, joined_at, created_at, updated_at
         "#,
         )
-            .bind(room.id)
-            .bind(member)
-            .bind("member")
-            .bind(current_time_millis().to_string())
-            .fetch_one(&state.db)
-            .await
+        .bind(room.id)
+        .bind(member)
+        .bind("member")
+        .bind(current_time_millis().to_string())
+        .fetch_one(&state.db)
+        .await
         {
             Ok(room) => room,
             Err(e) => {

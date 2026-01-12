@@ -1,9 +1,9 @@
 use crate::AppState;
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -30,7 +30,7 @@ pub async fn add_room_admin(
         SELECT 1
         FROM users
         WHERE id = $1
-        "#
+        "#,
     )
     .bind(payload.user_id)
     .fetch_one(&state.db)
@@ -40,7 +40,10 @@ pub async fn add_room_admin(
         return (
             StatusCode::NOT_FOUND,
             Json(Response {
-                response_message: format!("User with id: '{}' not found od does not exist", payload.user_id),
+                response_message: format!(
+                    "User with id: '{}' not found od does not exist",
+                    payload.user_id
+                ),
                 error: Some("Member does not exist or room not found".into()),
             }),
         );
@@ -51,7 +54,7 @@ pub async fn add_room_admin(
         SELECT 1
         FROM rooms
         WHERE id = $1
-        "#
+        "#,
     )
     .bind(room_id)
     .fetch_one(&state.db)
@@ -61,7 +64,10 @@ pub async fn add_room_admin(
         return (
             StatusCode::NOT_FOUND,
             Json(Response {
-                response_message: format!("Room with id: '{}' not found or does not exist", room_id),
+                response_message: format!(
+                    "Room with id: '{}' not found or does not exist",
+                    room_id
+                ),
                 error: Some("Room not found".into()),
             }),
         );
@@ -72,7 +78,7 @@ pub async fn add_room_admin(
         UPDATE room_members 
         SET role = 'admin' 
         WHERE room_id = $1 AND user_id = $2
-        "#
+        "#,
     )
     .bind(room_id)
     .bind(payload.user_id)
@@ -98,7 +104,7 @@ pub async fn add_room_admin(
                     }),
                 )
             }
-        },
+        }
         Err(e) => {
             error!("ADD ROOM ADMIN REQUEST FAILED");
             (

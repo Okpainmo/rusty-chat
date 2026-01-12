@@ -1,10 +1,10 @@
 use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use axum::{
+    Json,
     extract::{Extension, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::Serialize;
 use tracing::error;
@@ -25,13 +25,13 @@ pub async fn bookmark_room(
     // Use array_append to add user_id to bookmarked_by if not already present
     // Postgres array_append adds duplicates, so we might want to check first or distinct.
     // A smarter query: UPDATE rooms SET bookmarked_by = array_append(bookmarked_by, $1) WHERE id = $2 AND NOT ($1 = ANY(bookmarked_by))
-    
+
     let result = sqlx::query(
         r#"
         UPDATE rooms 
         SET bookmarked_by = array_append(bookmarked_by, $1) 
         WHERE id = $2 AND NOT ($1 = ANY(bookmarked_by))
-        "#
+        "#,
     )
     .bind(user_id)
     .bind(room_id)
@@ -47,7 +47,7 @@ pub async fn bookmark_room(
             }),
         ),
         Err(e) => {
-            error!("BOOKMARK ROOM REQUEST FAILED");
+            error!("BOOKMARK ROOM REQUEST FAILED!");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(Response {

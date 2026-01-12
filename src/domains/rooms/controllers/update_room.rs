@@ -7,9 +7,9 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use tracing::error;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateRoomPayload {
@@ -25,6 +25,7 @@ pub struct Room {
     pub created_by: Option<i64>,
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
+    pub pinned_by: Vec<i64>,
     pub room_profile_image: Option<String>,
     pub co_member: Option<i64>,
     pub co_members: Option<Vec<i64>>,
@@ -58,12 +59,11 @@ pub async fn update_room(
     Json(payload): Json<UpdateRoomPayload>,
 ) -> impl IntoResponse {
     // 1. Verify room exists
-    let room_result = sqlx::query_as::<_, RoomLookup>(
-        "SELECT id, created_by FROM rooms WHERE id = $1"
-    )
-    .bind(room_id)
-    .fetch_optional(&state.db)
-    .await;
+    let room_result =
+        sqlx::query_as::<_, RoomLookup>("SELECT id, created_by FROM rooms WHERE id = $1")
+            .bind(room_id)
+            .fetch_optional(&state.db)
+            .await;
 
     let room = match room_result {
         Ok(Some(room)) => room,
@@ -93,7 +93,7 @@ pub async fn update_room(
 
     // 2. Check if user is the room creator or app admin
     let member_result = sqlx::query_as::<_, RoomMemberLookup>(
-        "SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2"
+        "SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2",
     )
     .bind(&room.id)
     .bind(session.user.id)
@@ -101,7 +101,11 @@ pub async fn update_room(
     .await;
 
     let is_authorized = match member_result {
-        Ok(Some(member)) => member.role == "admin" || Some(session.user.id) == room.created_by || session.user.is_admin,
+        Ok(Some(member)) => {
+            member.role == "admin"
+                || Some(session.user.id) == room.created_by
+                || session.user.is_admin
+        }
         Ok(None) => session.user.is_admin, // App admin can update even if not a member
         Err(_) => false,
     };
@@ -150,7 +154,7 @@ pub async fn update_room(
         UPDATE rooms
         SET {}, updated_at = NOW()
         WHERE id = $1
-        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, room_profile_image, co_member, co_members, is_public, created_at, updated_at
+        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, pinned_by, room_profile_image, co_member, co_members, is_public, created_at, updated_at
         "#,
         set_clauses.join(", ")
     );

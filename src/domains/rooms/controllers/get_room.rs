@@ -1,10 +1,10 @@
 use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use axum::{
+    Json,
     extract::{Extension, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use chrono::NaiveDateTime;
 use serde::Serialize;
@@ -62,7 +62,7 @@ pub async fn get_room(
                     error: Some("Room with the provided ID does not exist".into()),
                 }),
             )
-        },
+        }
         Err(e) => {
             error!("FAILED TO FETCH ROOM: DATABASE ERROR!");
             (

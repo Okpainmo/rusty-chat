@@ -1,10 +1,10 @@
 use crate::AppState;
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 use axum::{
+    Json,
     extract::{Extension, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::Serialize;
 use tracing::error;
@@ -27,7 +27,7 @@ pub async fn unbookmark_room(
         UPDATE rooms 
         SET bookmarked_by = array_remove(bookmarked_by, $1) 
         WHERE id = $2
-        "#
+        "#,
     )
     .bind(user_id)
     .bind(room_id)
@@ -43,7 +43,7 @@ pub async fn unbookmark_room(
             }),
         ),
         Err(e) => {
-            error!("UNBOOKMARK ROOM REQUEST FAILED");
+            error!("UNBOOKMARK ROOM REQUEST FAILED!");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(Response {

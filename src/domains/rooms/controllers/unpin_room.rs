@@ -15,7 +15,7 @@ pub struct Response {
     error: Option<String>,
 }
 
-pub async fn archive_room(
+pub async fn unpin_room(
     State(state): State<AppState>,
     Extension(session): Extension<SessionsMiddlewareOutput>,
     Path(room_id): Path<i64>,
@@ -25,8 +25,8 @@ pub async fn archive_room(
     let result = sqlx::query(
         r#"
         UPDATE rooms 
-        SET archived_by = array_append(archived_by, $1) 
-        WHERE id = $2 AND NOT ($1 = ANY(archived_by))
+        SET pinned_by = array_remove(pinned_by, $1) 
+        WHERE id = $2
         "#,
     )
     .bind(user_id)
@@ -38,16 +38,16 @@ pub async fn archive_room(
         Ok(_) => (
             StatusCode::OK,
             Json(Response {
-                response_message: "Room archived successfully".into(),
+                response_message: "Room unpinned successfully".into(),
                 error: None,
             }),
         ),
         Err(e) => {
-            error!("ARCHIVE ROOM REQUEST FAILED!");
+            error!("UNPIN ROOM REQUEST FAILED!");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(Response {
-                    response_message: "Failed to archive room".into(),
+                    response_message: "Failed to unpin room".into(),
                     error: Some(format!("Database error: {}", e)),
                 }),
             )

@@ -6,10 +6,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::error;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateRoomPayload {
@@ -33,6 +33,7 @@ pub struct Room {
     pub created_by: Option<i64>,
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
+    pub pinned_by: Vec<i64>,
     pub co_member: i64, // for private rooms only
     pub is_public: bool,
     pub created_at: NaiveDateTime,
@@ -89,46 +90,52 @@ pub async fn create_room(
                 error: Some("Room creation error".to_string()),
                 response: None,
             }),
-        )
+        );
     }
 
-    let co_member =  match sqlx::query_as::<_, UserLookUp>(
+    let co_member = match sqlx::query_as::<_, UserLookUp>(
         "SELECT id, full_name, created_at, updated_at FROM users WHERE id = $1",
     )
-        .bind(payload.co_member)
-        .fetch_optional(&state.db)
-        .await
-        {
-            Ok(Some(member)) => member,
-            Ok(None) => {
-                error!("ROOM CREATION ERROR: CO-MEMBER DATA NOT PROVIDED!");
+    .bind(payload.co_member)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(member)) => member,
+        Ok(None) => {
+            error!("ROOM CREATION ERROR: CO-MEMBER DATA NOT PROVIDED!");
 
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(Response {
-                        response_message: format!("Co-member with id: '{}' not found", payload.co_member),
-                        error: Some("Room creation error".to_string()),
-                        response: None,
-                    }),
-                )
-            },
-            Err(e) => {
-                error!("ROOM CREATION ERROR!");
+            return (
+                StatusCode::NOT_FOUND,
+                Json(Response {
+                    response_message: format!(
+                        "Co-member with id: '{}' not found",
+                        payload.co_member
+                    ),
+                    error: Some("Room creation error".to_string()),
+                    response: None,
+                }),
+            );
+        }
+        Err(e) => {
+            error!("ROOM CREATION ERROR!");
 
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(Response {
-                        response_message: format!("Co-member with id: '{}' not found", payload.co_member),
-                        error: Some(format!("Room creation error: {:?}", e)),
-                        response: None,
-                    })
-                )
-            }
-        };
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(Response {
+                    response_message: format!(
+                        "Co-member with id: '{}' not found",
+                        payload.co_member
+                    ),
+                    error: Some(format!("Room creation error: {:?}", e)),
+                    response: None,
+                }),
+            );
+        }
+    };
 
     // check to prevent creating a duplicate room for the same private chat
     match sqlx::query_as::<_, Room>(
-        "SELECT id, room_name, is_group, created_by, bookmarked_by, archived_by, co_member, is_public, created_at, updated_at
+        "SELECT id, room_name, is_group, created_by, bookmarked_by, archived_by, pinned_by, co_member, is_public, created_at, updated_at
             FROM rooms
             WHERE created_by = $1
                 AND room_name = $2
@@ -177,7 +184,7 @@ pub async fn create_room(
         r#"
         INSERT INTO rooms (room_name, is_group, created_by, co_member)
         VALUES ($1, $2, $3, $4 )
-        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, co_member, is_public, created_at, updated_at
+        RETURNING id, room_name, is_group, created_by, bookmarked_by, archived_by, pinned_by, co_member, is_public, created_at, updated_at
         "#,
     )
     .bind(&co_member.full_name)

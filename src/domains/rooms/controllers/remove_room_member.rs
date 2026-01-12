@@ -1,9 +1,9 @@
 use crate::AppState;
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -29,7 +29,7 @@ pub async fn remove_room_member(
         SELECT 1
         FROM users
         WHERE id = $1
-        "#
+        "#,
     )
     .bind(payload.user_id)
     .fetch_one(&state.db)
@@ -39,7 +39,10 @@ pub async fn remove_room_member(
         return (
             StatusCode::NOT_FOUND,
             Json(Response {
-                response_message: format!("User with id: '{}' not found od does not exist", payload.user_id),
+                response_message: format!(
+                    "User with id: '{}' not found od does not exist",
+                    payload.user_id
+                ),
                 error: Some("Member does not exist or room not found".into()),
             }),
         );
@@ -50,7 +53,7 @@ pub async fn remove_room_member(
         SELECT 1
         FROM rooms
         WHERE id = $1
-        "#
+        "#,
     )
     .bind(room_id)
     .fetch_one(&state.db)
@@ -60,17 +63,20 @@ pub async fn remove_room_member(
         return (
             StatusCode::NOT_FOUND,
             Json(Response {
-                response_message: format!("Room with id: '{}' not found or does not exist", room_id),
+                response_message: format!(
+                    "Room with id: '{}' not found or does not exist",
+                    room_id
+                ),
                 error: Some("Room not found".into()),
             }),
         );
     }
-    
+
     let result = sqlx::query(
         r#"
         DELETE FROM room_members 
         WHERE room_id = $1 AND user_id = $2
-        "#
+        "#,
     )
     .bind(room_id)
     .bind(payload.user_id)
@@ -79,7 +85,7 @@ pub async fn remove_room_member(
 
     match result {
         Ok(query_result) => {
-             if query_result.rows_affected() == 0 {
+            if query_result.rows_affected() == 0 {
                 (
                     StatusCode::NOT_FOUND,
                     Json(Response {
@@ -88,6 +94,26 @@ pub async fn remove_room_member(
                     }),
                 )
             } else {
+                // Update the rooms table to remove the member from co_members array
+                let update_result = sqlx::query(
+                    "UPDATE rooms SET co_members = array_remove(co_members, $1) WHERE id = $2",
+                )
+                .bind(payload.user_id)
+                .bind(room_id)
+                .execute(&state.db)
+                .await;
+
+                if let Err(e) = update_result {
+                    error!("Failed to update rooms co_members: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(Response {
+                            response_message: "Failed to update room details".into(),
+                            error: Some(format!("Database error: {}", e)),
+                        }),
+                    );
+                }
+
                 (
                     StatusCode::OK,
                     Json(Response {
@@ -96,7 +122,7 @@ pub async fn remove_room_member(
                     }),
                 )
             }
-        },
+        }
         Err(e) => {
             error!("REMOVE ROOM MEMBER REQUEST FAILED");
             (

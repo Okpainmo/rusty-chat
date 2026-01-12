@@ -1,10 +1,5 @@
 use crate::AppState;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use chrono::NaiveDateTime;
 use serde::Serialize;
 use tracing::error;
@@ -17,6 +12,7 @@ pub struct Room {
     pub created_by: Option<i64>,
     pub bookmarked_by: Vec<i64>,
     pub archived_by: Vec<i64>,
+    pub pinned_by: Vec<i64>,
     pub room_profile_image: Option<String>,
     pub co_member: Option<i64>,
     pub co_members: Option<Vec<i64>>,
@@ -33,9 +29,7 @@ pub struct RoomsResponse {
     error: Option<String>,
 }
 
-pub async fn get_all_open_rooms(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn get_all_open_rooms(State(state): State<AppState>) -> impl IntoResponse {
     let result = sqlx::query_as::<_, Room>("SELECT * FROM rooms WHERE is_public = true")
         .fetch_all(&state.db)
         .await;
