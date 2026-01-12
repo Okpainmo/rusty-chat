@@ -9,5 +9,5 @@ pub mod un_archive_message;
 pub mod un_bookmark_message;
 pub mod update_message;
 pub mod sync_room_messages_status_to_delivered;
-pub mod sync_room_messages_status_to_seen;
+pub mod sync_messages_status_to_seen;
 pub mod react_to_message;

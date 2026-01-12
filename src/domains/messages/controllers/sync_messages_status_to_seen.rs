@@ -71,7 +71,7 @@ pub struct PayloadSpecs {
     user_id: i64,
 }
 
-pub async fn sync_room_messages_status_to_seen(
+pub async fn sync_messages_status_to_seen(
     State(state): State<AppState>,
     Extension(_session): Extension<SessionsMiddlewareOutput>,
     Json(payload): Json<PayloadSpecs>,
@@ -107,13 +107,13 @@ pub async fn sync_room_messages_status_to_seen(
     for room in rooms {
         let room_id = room.id;
 
-        // Step 2: Fetch all the messages in this room (excluding those already 'seen' or 'updated' if we want optimization, 
+        // Step 2: Fetch all the messages in this room (excluding those already 'seen' if we want optimization, 
         // but following the original pattern of fetching all and checking)
         let messages_result = sqlx::query_as::<_, Message>(
             r#"
             SELECT * 
             FROM messages 
-            WHERE room_id = $1 AND status NOT IN ('seen', 'updated')
+            WHERE room_id = $1 AND status NOT IN ('seen')
             ORDER BY created_at ASC
             "#
         )
@@ -208,6 +208,8 @@ pub async fn sync_room_messages_status_to_seen(
                                     })
                                 });
 
+                                println!("is_seen_by_all: {}", is_seen_by_all);
+
                                 if is_seen_by_all {
                                     let _ = sqlx::query(
                                         r#"
@@ -231,8 +233,8 @@ pub async fn sync_room_messages_status_to_seen(
     (
         StatusCode::OK,
         Json(SyncRoomMessagesStatusResponse {
-            response_message: "All room messages statuses synced to seen successfully".to_string(),
-            response: Some("All room messages statuses synced to seen successfully".to_string()),
+            response_message: "All room messages statuses synced successfully".to_string(),
+            response: Some("All room messages statuses synced successfully".to_string()),
             error: None,
         }),
     )

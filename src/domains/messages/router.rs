@@ -10,7 +10,8 @@ use crate::domains::messages::controllers::get_message_edit_history::get_message
 use crate::domains::messages::controllers::get_message_status_receipts::get_message_status_receipts;
 use crate::domains::messages::controllers::get_room_messages::get_room_messages;
 use crate::domains::messages::controllers::sync_room_messages_status_to_delivered::sync_room_messages_status_to_delivered;
-use crate::domains::messages::controllers::sync_room_messages_status_to_seen::sync_room_messages_status_to_seen;
+use crate::domains::messages::controllers::sync_messages_status_to_seen::sync_messages_status_to_seen;
+use crate::domains::messages::controllers::react_to_message::react_to_message;
 use crate::middlewares::auth_access_middleware::access_middleware;
 use crate::middlewares::auth_sessions_middleware::sessions_middleware;
 use axum::routing::{delete, get, patch, post};
@@ -30,7 +31,8 @@ pub fn messages_routes(state: &AppState) -> Router<AppState> {
         .route("/get-message-status-receipts/{message_id}", get(get_message_status_receipts))
         .route("/get-room-messages/{room_id}", get(get_room_messages))
         .route("/sync-room-messages-status-to-delivered/{room_id}", post(sync_room_messages_status_to_delivered))
-        .route("/sync-room-messages-status-to-seen", post(sync_room_messages_status_to_seen))
+        .route("/sync-messages-status-to-seen", post(sync_messages_status_to_seen))
+        .route("/react-to-message/{message_id}", post(react_to_message))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             access_middleware,

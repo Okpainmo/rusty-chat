@@ -124,93 +124,95 @@ pub async fn sync_room_messages_status_to_delivered(
         Ok(messages) => {
             // Step 2: For each message, fetch the status receipts that match the latest update on the message
             for message in messages {
-                match room.is_group {
-                    false => {
-                        // Step 3: create a delivery receipt for this user
-                        if user_id == room.co_member.unwrap() {
-                            receipt_res = sqlx::query(
-                                r#"
-                                INSERT INTO message_status_receipts (message_id, sender_id, receiver_id, room_id, action, status)
-                                VALUES ($1, $2, $3, $4, 'system', 'delivered')
-                                "#
-                            )
-                            .bind(message.id)
-                            .bind(message.sender_id)
-                            .bind(user_id)
-                            .bind(room_id)
-                            .execute(&state.db)
-                            .await
-                            .map(|_| ());
-
-                            if receipt_res.is_err() {
-                                error!("FAILED TO INSERT MESSAGE STATUS RECEIPT!");
-                                return (
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                    Json(SyncRoomMessagesStatusResponse {
-                                        response_message: "Failed to insert message status receipt".to_string(),
-                                        response: None,
-                                        error: Some("Failed to insert message status receipt".to_string()),
-                                    }),
-                                );
-                            }
-
-                            // Step 4: Update the message status to delivered
-                            let update_res = sqlx::query(
-                                r#"
-                                UPDATE messages 
-                                SET status = 'delivered' 
-                                WHERE id = $1
-                                "#
-                            )
-                            .bind(message.id)
-                            .execute(&state.db)
-                            .await
-                            .map(|_| ());
-            
-                            if update_res.is_err() {
-                                error!("FAILED TO UPDATE MESSAGE STATUS!");
-                                return (
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                    Json(SyncRoomMessagesStatusResponse {
-                                        response_message: "Failed to update message status".to_string(),
-                                        response: None,
-                                        error: Some("Failed to update message status".to_string()),
-                                    }),
-                                );
-                            }
-                        } 
-                    },
-                    true => {
-                        // similarly, create a delivery status receipt for this user
-                        if room.co_members.clone().unwrap().contains(&user_id) {
-                            receipt_res = sqlx::query(
-                                r#"
-                                INSERT INTO message_status_receipts (message_id, sender_id, receiver_id, room_id, action, status)
-                                VALUES ($1, $2, $3, $4, 'system', 'delivered')
-                                "#
-                            )
-                            .bind(message.id)
-                            .bind(message.sender_id)
-                            .bind(user_id)
-                            .bind(room_id)
-                            .execute(&state.db)
-                            .await
-                            .map(|_| ());
-
-                             if let Err(e) = receipt_res {
-                                error!("FAILED TO INSERT MESSAGE STATUS RECEIPT!");
-                                return (
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                    Json(SyncRoomMessagesStatusResponse {
-                                        response_message: "Failed to insert message status receipt".to_string(),
-                                        response: None,
-                                        error: Some(e.to_string()),
-                                    }),
-                                );
-                            }
-
-                            // Unlike for private chats, don't update message to delivered directly since this user might not be the only room member
-                        } 
+                if message.sender_id != Some(user_id) {
+                    match room.is_group {
+                        false => {
+                            // Step 3: create a delivery receipt for this user
+                            if user_id == room.co_member.unwrap() {
+                                receipt_res = sqlx::query(
+                                    r#"
+                                    INSERT INTO message_status_receipts (message_id, sender_id, receiver_id, room_id, action, status)
+                                    VALUES ($1, $2, $3, $4, 'system', 'delivered')
+                                    "#
+                                )
+                                .bind(message.id)
+                                .bind(message.sender_id)
+                                .bind(user_id)
+                                .bind(room_id)
+                                .execute(&state.db)
+                                .await
+                                .map(|_| ());
+    
+                                if receipt_res.is_err() {
+                                    error!("FAILED TO INSERT MESSAGE STATUS RECEIPT!");
+                                    return (
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        Json(SyncRoomMessagesStatusResponse {
+                                            response_message: "Failed to insert message status receipt".to_string(),
+                                            response: None,
+                                            error: Some("Failed to insert message status receipt".to_string()),
+                                        }),
+                                    );
+                                }
+    
+                                // Step 4: Update the message status to delivered
+                                let update_res = sqlx::query(
+                                    r#"
+                                    UPDATE messages 
+                                    SET status = 'delivered' 
+                                    WHERE id = $1
+                                    "#
+                                )
+                                .bind(message.id)
+                                .execute(&state.db)
+                                .await
+                                .map(|_| ());
+                
+                                if update_res.is_err() {
+                                    error!("FAILED TO UPDATE MESSAGE STATUS!");
+                                    return (
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        Json(SyncRoomMessagesStatusResponse {
+                                            response_message: "Failed to update message status".to_string(),
+                                            response: None,
+                                            error: Some("Failed to update message status".to_string()),
+                                        }),
+                                    );
+                                }
+                            } 
+                        },
+                        true => {
+                            // similarly, create a delivery status receipt for this user
+                            if room.co_members.clone().unwrap().contains(&user_id) {
+                                receipt_res = sqlx::query(
+                                    r#"
+                                    INSERT INTO message_status_receipts (message_id, sender_id, receiver_id, room_id, action, status)
+                                    VALUES ($1, $2, $3, $4, 'system', 'delivered')
+                                    "#
+                                )
+                                .bind(message.id)
+                                .bind(message.sender_id)
+                                .bind(user_id)
+                                .bind(room_id)
+                                .execute(&state.db)
+                                .await
+                                .map(|_| ());
+    
+                                 if let Err(e) = receipt_res {
+                                    error!("FAILED TO INSERT MESSAGE STATUS RECEIPT!");
+                                    return (
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        Json(SyncRoomMessagesStatusResponse {
+                                            response_message: "Failed to insert message status receipt".to_string(),
+                                            response: None,
+                                            error: Some(e.to_string()),
+                                        }),
+                                    );
+                                }
+    
+                                // Unlike for private chats, don't update message to delivered directly since this user might not be the only room member
+                            } 
+                        }
                     }
                 }
 
@@ -218,8 +220,10 @@ pub async fn sync_room_messages_status_to_delivered(
                 Step 3: Now loop through all the current delivered
                 receipts(of the latest message update counter) for each message 
                 to see if every member has a delivered receipt
+                
+                P.S: Still ensure that we are performing this action for users that are not the sender
                 */
-                if room.is_group == true {
+                if room.is_group == true && message.sender_id != Some(user_id) {
                     let message_status_receipts_result = sqlx::query_as::<_, MessageStatusReceipt>(
                             r#"
                             SELECT * 
