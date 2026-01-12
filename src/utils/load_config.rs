@@ -1,7 +1,7 @@
-use serde::Deserialize;
+use crate::utils::load_env::load_env;
 use anyhow::{Context, Result};
 use config::{Config, Environment, File};
-use crate::utils::load_env::load_env;
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
@@ -42,7 +42,6 @@ pub struct ClientIntegrationsSection {
     #[serde(default)]
     pub allow_admin_routes_protector_middleware: bool,
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct ObservabilitySection {
@@ -97,7 +96,7 @@ pub fn load_config() -> Result<AppConfig> {
 
     /**************** EXPLAINING THE MAPPING RULE FOR THE [ABOVE] FINAL ENV OVERRIDES ****************
     /**************** EXPLAINING THE MAPPING RULE FOR THE [ABOVE] FINAL ENV OVERRIDES ****************
-    
+
     # Mapping Rule (exact)
 
     APP_<SECTION>__<FIELD>=value
@@ -121,7 +120,7 @@ pub fn load_config() -> Result<AppConfig> {
     SERVER_PORT=9000
 
     This does nothing unless you explicitly read it in code.
-    
+
     **************** EXPLAINING THE MAPPING RULE FOR THE [ABOVE] FINAL ENV OVERRIDES ****************/
     **************** EXPLAINING THE MAPPING RULE FOR THE [ABOVE] FINAL ENV OVERRIDES ****************/
 
@@ -131,7 +130,6 @@ pub fn load_config() -> Result<AppConfig> {
         .try_deserialize()
         .context("Invalid config shape")
 }
-
 
 impl AppConfig {
     pub fn validate(&self) -> Result<()> {
