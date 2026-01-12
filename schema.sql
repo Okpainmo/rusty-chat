@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS messages (
   updates_counter INTEGER NOT NULL DEFAULT 0,
   CONSTRAINT updates_counter_check CHECK (updates_counter >= 0),
   CONSTRAINT type_check CHECK (type IN ('regular', 'voice_note', 'voice_call', 'video_call')),
-  CONSTRAINT status_check CHECK (status IN ('sent', 'delivered', 'seen', 'updated'))
+  CONSTRAINT status_check CHECK (status IN ('sent', 'delivered', 'seen', 'updated', 'reacted'))
 );
 
 -- Message Status Receipt Table
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS message_status_receipts (
      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
      updates_count_tracker INTEGER NOT NULL DEFAULT 0,
      CONSTRAINT updates_count_tracker_check CHECK (updates_count_tracker >= 0),
-     CONSTRAINT message_status_check CHECK (status IN ('sent', 'delivered', 'seen', 'updated')),
+     CONSTRAINT message_status_check CHECK (status IN ('sent', 'delivered', 'seen', 'updated', 'reacted')),
      CONSTRAINT message_status_receipts_action_check CHECK (action IN ('original-send', 'edit', 'delete', 'reaction', 'system'))
 );
 
@@ -157,3 +157,42 @@ CREATE TABLE IF NOT EXISTS message_edits (
 
 CREATE INDEX IF NOT EXISTS idx_message_edits_message_id ON message_edits (message_id);
 CREATE INDEX IF NOT EXISTS idx_message_edits_created_at ON message_edits (created_at);
+
+-- Message Reactions Table
+CREATE TABLE IF NOT EXISTS message_reactions (
+    id BIGSERIAL PRIMARY KEY,
+
+    message_id BIGINT NOT NULL
+        REFERENCES messages(id) ON DELETE CASCADE,
+
+    room_id BIGINT NOT NULL
+        REFERENCES rooms(id) ON DELETE CASCADE,
+
+    sender_id BIGINT NOT NULL
+        REFERENCES users(id) ON DELETE CASCADE,
+
+    reaction_type TEXT NOT NULL,
+
+    -- tracks which message version the reaction applies to
+    message_updates_counter INTEGER NOT NULL DEFAULT 0
+        CHECK (message_updates_counter >= 0),
+
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    -- one reaction type per user per message
+    CONSTRAINT unique_user_reaction
+        UNIQUE (message_id, sender_id, reaction_type)
+);
+
+-- fast reaction lookup per message
+CREATE INDEX idx_message_reactions_message
+ON message_reactions (message_id);
+
+-- fast room-wide aggregation (group chats)
+CREATE INDEX idx_message_reactions_room
+ON message_reactions (room_id);
+
+-- fast per-user reaction management
+CREATE INDEX idx_message_reactions_sender
+ON message_reactions (sender_id);
