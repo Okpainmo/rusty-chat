@@ -12,7 +12,7 @@ use tracing::error;
 
 #[derive(Debug, Deserialize)]
 pub struct ReactToMessagePayload {
-    pub reaction: String, // e.g., "👍", "❤️", "😂", etc.
+    pub reaction_type: String, // e.g., "👍", "❤️", "😂", etc.
     pub sender_id: i64
 }
 
@@ -55,15 +55,24 @@ pub struct Room {
 pub struct MessageReaction {
     pub id: i64,
     pub message_id: i64,
-    pub user_id: i64,
-    pub reaction: String,
+    pub room_id: i64,
+    pub message_updates_counter: i32,
+    pub sender_id: i64,
+    pub reaction_type: String,
     pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct ResponseCore {
+    // reaction: Option<MessageReaction>,
+    message: Option<Message>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ReactToMessageResponse {
     pub response_message: String,
-    pub reaction: Option<MessageReaction>,
+    pub response: Option<ResponseCore>,
     pub error: Option<String>,
 }
 
@@ -88,7 +97,7 @@ pub async fn react_to_message(
                 StatusCode::NOT_FOUND,
                 Json(ReactToMessageResponse {
                     response_message: "Message not found".to_string(),
-                    reaction: None,
+                    response: None,
                     error: Some("Message not found".to_string()),
                 }),
             );
@@ -100,7 +109,7 @@ pub async fn react_to_message(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ReactToMessageResponse {
                     response_message: "Database error".to_string(),
-                    reaction: None,
+                    response: None,
                     error: Some(e.to_string()),
                 }),
             );
@@ -125,7 +134,7 @@ pub async fn react_to_message(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ReactToMessageResponse {
                     response_message: "Failed to get room".to_string(),
-                    reaction: None,
+                    response: None,
                     error: Some(e.to_string()),
                 }),
             );
@@ -137,7 +146,8 @@ pub async fn react_to_message(
         room.co_members
             .as_ref()
             .map(|members| members.contains(&payload.sender_id))
-            .unwrap_or(false)
+            .unwrap_or(false) || 
+        message.sender_id == Some(payload.sender_id)
     } else {
         room.co_member == Some(payload.sender_id) || 
         message.sender_id == Some(payload.sender_id)
@@ -150,45 +160,50 @@ pub async fn react_to_message(
             StatusCode::FORBIDDEN,
             Json(ReactToMessageResponse {
                 response_message: "You are not authorized to react to this message".to_string(),
-                reaction: None,
-                error: Some("Forbidden".to_string()),
+                response: None,
+                error: Some("FORBIDDEN".to_string()),
             }),
         );
     }
 
     // 4. Check if user has already reacted to this message
     let existing_reaction = sqlx::query_as::<_, MessageReaction>(
-        "SELECT * FROM message_reactions WHERE message_id = $1 AND user_id = $2"
+        "SELECT * FROM message_reactions WHERE message_id = $1 AND sender_id = $2"
     )
     .bind(message_id)
     .bind(&payload.sender_id)
     .fetch_optional(&state.db)
     .await;
 
+    let new_updates_count = message.updates_counter + 1;
+
     let reaction_result = match existing_reaction {
-        Ok(Some(existing)) => {
+        Ok(Some(_)) => {
             // Update existing reaction
             sqlx::query_as::<_, MessageReaction>(
-                "UPDATE message_reactions SET reaction = $1, created_at = NOW() 
-                 WHERE message_id = $2 AND user_id = $3 
+                "UPDATE message_reactions SET reaction_type = $1, updated_at = NOW() 
+                 WHERE message_id = $2 AND sender_id = $3 AND message_updates_counter = $4 
                  RETURNING *"
             )
-            .bind(&payload.reaction)
+            .bind(&payload.reaction_type)
             .bind(message_id)
             .bind(&payload.sender_id)
+            .bind(new_updates_count)
             .fetch_one(&state.db)
             .await
         }
         Ok(None) => {
             // Create new reaction
             sqlx::query_as::<_, MessageReaction>(
-                "INSERT INTO message_reactions (message_id, user_id, reaction) 
-                 VALUES ($1, $2, $3) 
+                "INSERT INTO message_reactions (message_id, room_id, sender_id, reaction_type, message_updates_counter) 
+                 VALUES ($1, $2, $3, $4, $5) 
                  RETURNING *"
             )
             .bind(message_id)
+            .bind(&room.id)
             .bind(&payload.sender_id)
-            .bind(&payload.reaction)
+            .bind(&payload.reaction_type)
+            .bind(new_updates_count)
             .fetch_one(&state.db)
             .await
         }
@@ -198,14 +213,14 @@ pub async fn react_to_message(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ReactToMessageResponse {
                     response_message: "Failed to check existing reaction".to_string(),
-                    reaction: None,
+                    response: None,
                     error: Some(e.to_string()),
                 }),
             );
         }
     };
 
-    let reaction = match reaction_result {
+    match reaction_result {
         Ok(r) => r,
         Err(e) => {
             error!("FAILED TO SAVE REACTION: {}", e);
@@ -213,16 +228,47 @@ pub async fn react_to_message(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ReactToMessageResponse {
                     response_message: "Failed to save reaction".to_string(),
-                    reaction: None,
+                    response: None,
                     error: Some(e.to_string()),
                 }),
             );
         }
     };
 
-    // 5. Create reaction status receipts
+    // 5. Update the message status
+    let update_message_status_res = sqlx::query_as::<_, Message>(
+        r#"
+        UPDATE messages
+        SET status = 'reacted'
+        WHERE id = $1
+        RETURNING *
+        "#
+    )
+    .bind(message_id)
+    .fetch_one(&state.db)
+    .await;
+
+    let updated_message = match update_message_status_res {
+        Ok(message) => {message},
+        Err(e) => {
+            error!("FAILED TO UPDATE MESSAGE STATUS!");
+            return (
+                StatusCode::OK,
+                Json(ReactToMessageResponse {
+                    response_message: "Reaction added successfully but failed to update message status".to_string(),
+                    response: Some(ResponseCore {
+                        // reaction: Some(reaction),
+                        message: None,
+                    }),
+                    error: Some(e.to_string()),
+                }),
+            )
+        }
+    };
+
+    // 6. Create reaction status receipts
     let receipt_res: Result<(), sqlx::Error>;
-    let new_updates_count = message.updates_counter + 1;
+    // let new_updates_count = message.updates_counter + 1;
 
     match room.is_group {
         false => {
@@ -254,9 +300,9 @@ pub async fn react_to_message(
             if let Some(members) = &room.co_members {
                 for room_member in members {
                     // Skip the sender
-                    if *room_member == payload.sender_id {
-                        continue;
-                    }
+                    // if *room_member == payload.sender_id {
+                    //     continue;
+                    // }
 
                     let res = sqlx::query(
                         r#"
@@ -288,7 +334,10 @@ pub async fn react_to_message(
                 StatusCode::OK,
                 Json(ReactToMessageResponse {
                     response_message: "Reaction added successfully".to_string(),
-                    reaction: Some(reaction),
+                    response: Some(ResponseCore {
+                        // reaction: Some(reaction),
+                        message: Some(updated_message),
+                    }),
                     error: None,
                 }),
             )
@@ -300,8 +349,11 @@ pub async fn react_to_message(
                 StatusCode::OK,
                 Json(ReactToMessageResponse {
                     response_message: "Reaction added successfully but failed to create message status receipt".to_string(),
-                    reaction: Some(reaction),
-                    error: None,
+                    response: Some(ResponseCore {
+                        // reaction: None,
+                        message: Some(updated_message),
+                    }),
+                    error: Some(e.to_string()),
                 }),
             )
         }
