@@ -80,8 +80,10 @@ CREATE TABLE IF NOT EXISTS messages (
   sent_at VARCHAR(20) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updates_counter INTEGER NOT NULL DEFAULT 0,
+  CONSTRAINT updates_counter_check CHECK (updates_counter >= 0),
   CONSTRAINT type_check CHECK (type IN ('regular', 'voice_note', 'voice_call', 'video_call')),
-  CONSTRAINT status_check CHECK (status IN ('sent', 'delivered', 'seen'))
+  CONSTRAINT status_check CHECK (status IN ('sent', 'delivered', 'seen', 'updated'))
 );
 
 -- Message Status Receipt Table
@@ -95,7 +97,9 @@ CREATE TABLE IF NOT EXISTS message_status_receipts (
      action TEXT NOT NULL,
      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-     CONSTRAINT message_status_check CHECK (status IN ('sent', 'delivered', 'seen')),
+     updates_count_tracker INTEGER NOT NULL DEFAULT 0,
+     CONSTRAINT updates_count_tracker_check CHECK (updates_count_tracker >= 0),
+     CONSTRAINT message_status_check CHECK (status IN ('sent', 'delivered', 'seen', 'updated')),
      CONSTRAINT message_status_receipts_action_check CHECK (action IN ('original-send', 'edit', 'delete', 'reaction', 'system'))
 );
 
@@ -104,6 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_message_status_receipts_action ON message_status_
 
 -- Index for message_status_receipts history lookups
 CREATE INDEX IF NOT EXISTS idx_message_status_receipts_message ON message_status_receipts (message_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_message_receipts_update_tracking ON message_status_receipts (message_id, updates_count_tracker);
 
 -- Call Logs Table
 CREATE TABLE IF NOT EXISTS call_logs (
