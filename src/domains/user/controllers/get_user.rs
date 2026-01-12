@@ -1,14 +1,9 @@
 use crate::AppState;
 use axum::extract::State;
-use axum::{
-    Json,
-    extract::Path,
-    http::StatusCode,
-    response::IntoResponse,
-};
+use axum::{Json, extract::Path, http::StatusCode, response::IntoResponse};
+use chrono::NaiveDateTime;
 use serde::Serialize;
 use tracing::error;
-use chrono::NaiveDateTime;
 // use crate::middlewares::auth_sessions_middleware::SessionUser;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]

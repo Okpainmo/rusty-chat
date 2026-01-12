@@ -10,10 +10,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
 use tracing::error;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateUserPayload {
@@ -23,7 +23,7 @@ pub struct UpdateUserPayload {
     pub country: Option<String>,
     pub phone_number: Option<String>,
     pub status: Option<String>,
-    pub last_seen: Option<String>
+    pub last_seen: Option<String>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -189,12 +189,13 @@ pub async fn update_user(
     if let Some(email) = &payload.email {
         // handle regeneration for new user email before binding it in
         // 1. verify that the user exist
-        let user_result =
-            sqlx::query_as::<_, UserLookup>("SELECT id, email, created_at, updated_at FROM users WHERE id = $1")
-                // user_id from request param
-                .bind(user_id)
-                .fetch_optional(&state.db)
-                .await;
+        let user_result = sqlx::query_as::<_, UserLookup>(
+            "SELECT id, email, created_at, updated_at FROM users WHERE id = $1",
+        )
+        // user_id from request param
+        .bind(user_id)
+        .fetch_optional(&state.db)
+        .await;
 
         let user = match user_result {
             Ok(Some(user)) => user,

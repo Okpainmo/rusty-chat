@@ -1,7 +1,7 @@
 use crate::middlewares::auth_sessions_middleware::SessionsMiddlewareOutput;
 
 use crate::AppState;
-use crate::utils::file_upload_handler::{upload_file, UploadType};
+use crate::utils::file_upload_handler::{UploadType, upload_file};
 use axum::extract::State;
 use axum::{
     Json,
@@ -10,10 +10,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use tower_cookies::Cookies;
 use tracing::error;
-use chrono::NaiveDateTime;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateProfileImagePayload {
@@ -67,11 +67,13 @@ pub async fn update_profile_image(
 ) -> impl IntoResponse {
     // extract file for upload
     // let field: Result<Option<Field>, MultipartError> = multipart
-    let user_result = sqlx::query_as::<_, UserLookup>("SELECT id, email, created_at, updated_at FROM users WHERE id = $1")
-        // user_id from request param
-        .bind(user_id)
-        .fetch_optional(&state.db)
-        .await;
+    let user_result = sqlx::query_as::<_, UserLookup>(
+        "SELECT id, email, created_at, updated_at FROM users WHERE id = $1",
+    )
+    // user_id from request param
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await;
 
     let user = match user_result {
         Ok(Some(user)) => user,
@@ -144,21 +146,22 @@ pub async fn update_profile_image(
         }
     };
 
-    let file_url = match upload_file(State(&state), file, &user_id, UploadType::UserProfileImage).await {
-        Ok(file_url) => file_url,
-        Err(e) => {
-            error!("PROFILE IMAGE UPLOAD FAILED!");
+    let file_url =
+        match upload_file(State(&state), file, &user_id, UploadType::UserProfileImage).await {
+            Ok(file_url) => file_url,
+            Err(e) => {
+                error!("PROFILE IMAGE UPLOAD FAILED!");
 
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(UpdateResponse {
-                    response_message: "Failed to update user".into(),
-                    response: None,
-                    error: Some(format!("Database error: {}", e)),
-                }),
-            );
-        }
-    };
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(UpdateResponse {
+                        response_message: "Failed to update user".into(),
+                        response: None,
+                        error: Some(format!("Database error: {}", e)),
+                    }),
+                );
+            }
+        };
 
     let res = sqlx::query_as::<_, UserProfile>(
         r#"
