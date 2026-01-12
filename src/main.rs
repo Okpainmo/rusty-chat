@@ -14,14 +14,14 @@ use aws_credential_types::Credentials;
 use aws_sdk_s3::Client;
 
 // logging init with the tracing crate
-use tracing::info;
 use tracing::error;
+use tracing::info;
 use tracing_subscriber::fmt::time::SystemTime;
 
 // utils import
 mod utils;
+use crate::utils::load_config::{AppConfig, load_config};
 use crate::utils::load_env::load_env;
-use crate::utils::load_config::{load_config, AppConfig};
 // db import
 mod db;
 use db::connect_postgres::connect_pg;
@@ -30,15 +30,13 @@ use db::connect_postgres::connect_pg;
 mod domains;
 use crate::domains::admin::router::admin_routes;
 use crate::domains::auth::router::auth_routes;
-use crate::domains::user::router::user_routes;
-use crate::domains::rooms::router::rooms_routes;
 use crate::domains::messages::router::messages_routes;
+use crate::domains::rooms::router::rooms_routes;
+use crate::domains::user::router::user_routes;
 
 mod middlewares;
 use crate::middlewares::logging_middleware::logging_middleware;
 use crate::middlewares::request_timeout_middleware::timeout_middleware;
-
-
 
 #[derive(Clone, Debug)]
 pub struct AppState {
@@ -112,7 +110,7 @@ async fn main() {
     let user = env::var("POSTGRES_USER").unwrap();
     let pass = env::var("POSTGRES_PASSWORD").unwrap();
     let host = env::var("POSTGRES_HOST").unwrap();
-    let db_port = env::var("POSTGRES_PORT").unwrap(); 
+    let db_port = env::var("POSTGRES_PORT").unwrap();
     let db = env::var("POSTGRES_DB").unwrap();
 
     let database_url = format!("postgres://{}:{}@{}:{}/{}", user, pass, host, db_port, db);
@@ -168,7 +166,7 @@ async fn main() {
                 ",
                 slice_db_url, environment, addr
             );
-            
+
             listener
         }
         Err(e) => {
